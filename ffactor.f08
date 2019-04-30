@@ -61,7 +61,8 @@ contains
     ! read*,inputfile
     ! write(6,*) "How many steps?"
     ! set the number of frames to be read in
-    stepmax = 5001
+    ! stepmax = 5001
+    stepmax = 2520
     ! write(6,*) "How many columns?"
     ! read*,row, set the number of rows
     row = 5
@@ -163,7 +164,7 @@ contains
   subroutine smrg(lower,upper)
     real(dp) xi, yi, zi, rdiff, rtot
     integer(sp) j,k,lower,upper
-    rdiff = 0.0
+    rdiff = 0.0_dp
     do j=lower,upper-1
       do k=j+1,upper
         xi = array(j,3) - array(k,3)
@@ -172,7 +173,7 @@ contains
         rdiff = rdiff + xi**2 + yi**2 + zi**2
       end do
     end do
-    rtot = 1.0*sqrt(rdiff/(molsize**2))
+    rtot = 1.0_dp*sqrt(rdiff/(molsize**2))
     write(42,*) Nstep, rtot
   end subroutine smrg
 
@@ -188,26 +189,26 @@ contains
     integer(sp) j,k,m,lower,upper,qpoints
     ! write(6,*) "hello"
     ! write(6,*) size(q)
-    qdiff = 0.0
+    qdiff = 0.0_dp
     ! if (Nstep == 1) then
-        lmin = -3.0
-        lmax = 1.0
+        lmin = -3.0_dp
+        lmax = 1.0_dp
         qpoints = 200
         allocate(qvalues(0:qpoints-1))
         allocate(pvalues(0:qpoints-1))
         allocate(q(0:qpoints-1))
-        q = 0.0
+        q = 0.0_dp
         do m=0,qpoints-1
           ! q(m) = 10.0**((1.0*((abs(lmin)+abs(lmax))/(1.0*qpoints))*m)+lmin)
-          q(m) = 10.0**(lmin + real(m)/real(qpoints) * (lmax-lmin))
+          q(m) = 10.0_dp**(lmin + real(m)/real(qpoints) * (lmax-lmin))
         end do
       if (qtrig .eqv. .true.) then
         call csv_write(43,q,.true.)
         qtrig = .false.
       end if
     ! end if
-    qvalues = 0.0
-    pvalues = 0.0
+    qvalues = 0.0_dp
+    pvalues = 0.0_dp
 
     !$OMP PARALLEL DO            &
     !$OMP SCHEDULE(STATIC)      &
@@ -217,7 +218,7 @@ contains
 
     do m = 0, qpoints-1
       ! write(6,*) m, q(m)
-      dummy_variable = 1.0
+      dummy_variable = real(upper,dp)
       do j = lower,upper-1
         do k = j+1,upper
             xj    = array(j,3) - array(k,3)
@@ -226,8 +227,8 @@ contains
             yj= yj - Ly*anint(yj/Ly)
             zj    = array(j,5) - array(k,5)
             zj= zj - Lz*anint(zj/Lz)
-            qdiff = 1.0*sqrt(xj**2 + yj**2 + zj**2)
-            dummy_variable  = dummy_variable + 2.0 * sin(q(m)*qdiff)/(q(m)*qdiff)
+            qdiff = 1.0_dp*sqrt(xj**2 + yj**2 + zj**2)
+            dummy_variable  = dummy_variable + 2.0_dp * sin(q(m)*qdiff)/(q(m)*qdiff)
         end do
       end do
       qvalues(m) = dummy_variable
