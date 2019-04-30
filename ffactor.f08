@@ -61,8 +61,8 @@ contains
     ! read*,inputfile
     ! write(6,*) "How many steps?"
     ! set the number of frames to be read in
-    ! stepmax = 5001
-    stepmax = 2520
+    stepmax = 5001
+    ! stepmax = 2520
     ! write(6,*) "How many columns?"
     ! read*,row, set the number of rows
     row = 5
