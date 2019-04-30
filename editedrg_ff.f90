@@ -3,6 +3,7 @@ program radius
 ! From the group of Prof Philip Camp
 ! subroutines by Julien Sindt, Rui Apóstolo in 2016
 ! the file was modified and adapted by Joanna Faulds in 2019
+! double precision added by Rui Apóstolo in 2019
 ! University of Edinburgh
 ! csv_file from flibs 0.9 - flibs.sourceforge.net/
   use csv_file
