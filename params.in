@@ -1,0 +1,17 @@
+# Be careful of ammount of spaces (min col 12)
+dump.npt.lammpstrj
+
+t
+t
+t
+t
+5           Number Columns
+20001       StepMax
+5001        IgnoreFirstSteps
+1           NMol
+737         MolSize
+6           MolStartType
+50          StepOutput
+-3.0        p(q)_exp_low
+1.0         p(q)_exp_high
+200         p(q)_num_points
