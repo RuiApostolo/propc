@@ -13,7 +13,7 @@ real(dp),dimension(:),allocatable::timestep
 real(dp) :: Lx, Ly, Lz, Hx, Hy, Hz, lmin, lmax
 
 ! integers
-integer(sp)::l,ierror,Natom,Nstep,NMol,mol,qpoints,inputf=20
+integer(sp)::l,ierror,Natom,Nstep,NMol,mol,qpoints,inputf=20,debugf=90
 integer(sp)::Columns,StepMax,IgnoreFirst,Molsize,MolStart,StepOutput
 
 ! logicals

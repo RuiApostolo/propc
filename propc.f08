@@ -10,9 +10,9 @@ use, intrinsic :: iso_fortran_env
 implicit none
 include 'variables.inc'
 
-debug = .false.
+debug = .true.
 if (debug .eqv. .true.) then
-  open(unit=93, file='debug.log', action='write', status='replace')
+  open(unit=debugf, file='debug.log', action='write', status='replace')
   write(6,*) "DEBUG MORE ON - CHECK DEBUG.LOG"
 end if
 
@@ -155,10 +155,13 @@ write(6,*)      "Form factor higher exponent:            ",trim(r2str(lmax))
 write(6,*)      "Form factor number of q points:         ",trim(i2str(qpoints))
 write(6,*)
 
+if (debug .eqv. .true.) write(debugf,*) "Input done"
+
 ! allocate arrays
 allocate(timestep(stepmax))
 allocate(array(NMol,MolSize,Columns))
 allocate(hold(NMol,3))
+if (debug .eqv. .true.) write(debugf,*) "allocated variables"
 ! open input file
 open(inputf,file=Inputfile,action='read',status='old')
 ! open output files
@@ -172,11 +175,11 @@ if (b_rg  .eqv. .true.) then
 end if
 if (b_ree .eqv. .true.) then
   open(unit=42, file='ree.dat', action='write', status='new')
-  write(41,"(A)",advance='no') 'Nstep'
+  write(42,"(A)",advance='no') 'Nstep'
   do l=1,NMol-1
-    write(41,"(A,I0)",advance='no') ' ree', l
+    write(42,"(A,I0)",advance='no') ' ree', l
   end do
-  write(41,"(A,I0)") ' ree', NMol
+  write(42,"(A,I0)") ' ree', NMol
 end if
 if (b_pq  .eqv. .true.) then
   open(unit=43, file='pq.dat', action='write', status='new')
@@ -186,7 +189,7 @@ if (b_trj .eqv. .true.) then
 end if
 
 
-
+if (debug .eqv. .true.) write(debugf,*) "opened files"
 
 
 
@@ -195,9 +198,11 @@ end if
 write(6,*)      "Ignoring first:                         ",trim(i2str(IgnoreFirst))," timesteps"
 write(6,*)
 
+if (debug .eqv. .true.) write(debugf,*) "starting skipping"
 do Nstep=1,IgnoreFirst
-    if (modulo(Nstep,100) == 0) write(6,*) Nstep
-    call skipdata
+  if (debug .eqv. .true.) write(debugf,*) Nstep
+  if (modulo(Nstep,100) == 0) write(6,*) Nstep
+  call skipdata
 end do
 call ETIME(tarray,cpu_time_now)
 call texttime(int(cpu_time_now-cpu_time_last),tsl)
@@ -212,6 +217,7 @@ write(6,*) Nstep
 
 
 do Nstep=IgnoreFirst+1,stepmax
+  if (debug .eqv. .true.) write(debugf,*) "main loop"
     if (modulo(Nstep,StepOutput) == 0) then
       call ETIME(tarray,cpu_time_now) ! new clock
       call texttime(int(cpu_time_now-cpu_time_last),tsl)
@@ -224,8 +230,9 @@ do Nstep=IgnoreFirst+1,stepmax
       cpu_time_last = cpu_time_now
     end if
     call readheader
-    call readdata
+    call readdata(MolStart,NMol,MolSize,Natom,Columns)
     if (Nstep==IgnoreFirst+1) then
+      if (debug .eqv. .true.) write(debugf,*) "started hold array"
       do mol=1,NMol
         hold(mol,1) = array(mol,1,3)
         hold(mol,2) = array(mol,1,4)
@@ -253,6 +260,7 @@ subroutine skipdata
   read(inputf,*)
   read(inputf,*)
   read(inputf,*) Natom
+  if (debug .eqv. .true.) write(debugf,*) "Skipped TS: ", Nstep," Natom: ",Natom
   do i=1,Natom+5
     read(inputf,*)
   end do
@@ -265,6 +273,7 @@ end subroutine skipdata
 
 subroutine readheader
   implicit none
+  if (debug .eqv. .true.) write(debugf,*) "started readheader"
   !Subroutine to read the box dimension at every subsequent timestep
   read(inputf, '(A)') headertext(1) ! ITEM: TIMESTEP
   read(inputf,*) timestep(Nstep)
@@ -281,6 +290,20 @@ subroutine readheader
   Lz = Volume(3,2) - Volume(3,1)
   Hz = Lz/2
   read(inputf, '(A)') headertext(4) ! ITEM: ATOMS id type x y z
+  if (debug .eqv. .true.) then
+    write(debugf,*) "readdata"
+    write(debugf,*) headertext(1)
+    write(debugf,*) timestep(Nstep)
+    write(debugf,*) headertext(2)
+    write(debugf,*) Natom
+    write(debugf,*) headertext(3)
+    write(debugf,*) Volume(1,1), Volume(1,2)
+    write(debugf,*) Volume(2,1), Volume(2,2)
+    write(debugf,*) Volume(3,1), Volume(3,2)
+    write(debugf,*) headertext(4)
+    write(debugf,*) "Lx,y,z: ",Lx,Ly,Lz
+    write(debugf,*) "Hx,y,z: ",Hx,Hy,Hz
+  end if
 end subroutine readheader
 
 
@@ -288,19 +311,35 @@ end subroutine readheader
 ! Read data and tabulate - Rui Apóstolo !
 !***************************************!
 
-subroutine readdata
+subroutine readdata(mstart,nmols,msize,atoms,col)
   implicit none
   !Read data from file and assign it to an array
+  integer(sp),intent(in)::nmols,msize,atoms,col,mstart
   integer(sp)::i,j,k,n
-  real(dp),dimension(3)::dummy
+  real(dp),dimension(col)::dummy
+  if (debug .eqv. .true.) write(debugf,*) "started readdata"
+  if (debug .eqv. .true.) write(debugf,*) (atoms-nmols*(msize-1))
   n=1
-  readloop: do i=1,(Natom-NMol*(MolSize-1))
-    read(inputf,*) (array(n,i,j),j=1,Columns)
-    if (int(array(n,i,2)) == MolStart) then
-      molloop: do k=2,MolSize
-        read(inputf,*) (array(n,k,j),j=1,Columns)
+  k=1
+  readloop: do i=1,(atoms-nmols*(msize-1))
+    read(inputf,*) (dummy(j),j=1,col)
+    if (debug .eqv. .true.) write(debugf,*) i, dummy
+    if (int(dummy(2)) == mstart) then
+      if (debug .eqv. .true.) write(debugf,*) "went to readdata molecule loop"
+      array(n,k,1:col) = dummy(1:col)
+      ! if (debug .eqv. .true.) write(debugf,*) (array(n,k,j),j=1,col)
+        ! if (debug .eqv. .true.) write(debugf,*) (array(n,k,j),j=1,col)
+      molloop: do k=2,msize
+        read(inputf,*) (array(n,k,j),j=1,col)
+        ! if (debug .eqv. .true.) write(debugf,*) (array(n,k,j),j=1,col)
       end do molloop
+      ! if (debug .eqv. .true.) then
+        ! do k=1,msize
+          ! write(debugf,*) (array(n,k,j),j=1,col)
+        ! end do
+      ! end if
       n = n+1
+      if (debug .eqv. .true.) write(debugf,*) "finishing readdata molecule loop"
     end if
   end do readloop
 end subroutine readdata
@@ -314,6 +353,7 @@ end subroutine readdata
 subroutine molrebuild
   implicit none
   integer(sp)::i,n
+  if (debug .eqv. .true.) write(debugf,*) "started molrebuild"
   do n=1,NMol
   ! to avoid clipping of first atom
     if (array(n,1,3) >= hold(n,1)+Hx) then
@@ -361,6 +401,7 @@ subroutine rg(lower,upper,nmols)
   integer(sp),intent(in)::lower,upper,nmols
   real(dp):: xi, yi, zi, rdiff, rtot
   integer(sp):: j,k,n
+  if (debug .eqv. .true.) write(debugf,*) "started rg"
   write(41,"(I0,A)",advance="no") Nstep, ' '
   do n=1,nmols
     rdiff = 0.0_dp
@@ -387,15 +428,16 @@ subroutine ree(lower,upper,nmols)
   integer(sp),intent(in)::lower,upper,nmols
   real(dp) :: reetot,xi,yi,zi
   integer(sp) :: i
-  write(44,"(i0,a)",advance="no") Nstep, ' '
+  if (debug .eqv. .true.) write(debugf,*) "started ree"
+  write(42,"(i0,a)",advance="no") Nstep, ' '
   do i=1,nmols
     xi = array(i,upper,3) - array(i,lower,3)
     yi = array(i,upper,4) - array(i,lower,4)
     zi = array(i,upper,5) - array(i,lower,5)
     reetot = 1.0_dp*sqrt(xi**2.0_dp + yi**2.0_dp + zi**2.0_dp)
-    write(44,"(f0.6,a)",advance="no") reetot, ' '
+    write(42,"(f0.6,a)",advance="no") reetot, ' '
   end do
-  write(44,"(A)") ' '
+  write(42,"(A)") ' '
 end subroutine ree
 
 !***********************************************************************!
@@ -409,22 +451,23 @@ subroutine formfactor(lower,upper,nmols)
   real(dp):: xj, yj, zj, qdiff, dummy_variable
   real(dp),dimension(:),allocatable::qvalues,pvalues,q
   integer(sp):: j,k,m,n,o
+  if (debug .eqv. .true.) write(debugf,*) "started formfactor"
+  allocate(qvalues(0:qpoints-1))
+  allocate(pvalues(0:qpoints-1))
+  allocate(q(0:qpoints-1))
+  qdiff = 0.0_dp
+  qvalues = 0.0_dp
+  pvalues = 0.0_dp
+  q = 0.0_dp
+  do m=0,qpoints-1
+    ! q(m) = 10.0**((1.0*((abs(lmin)+abs(lmax))/(1.0*qpoints))*m)+lmin)
+    q(m) = 10.0_dp**(lmin + real(m)/real(qpoints) * (lmax-lmin))
+  end do
   if (qtrig .eqv. .true.) then
-    q = 0.0_dp
-    do m=0,qpoints-1
-      ! q(m) = 10.0**((1.0*((abs(lmin)+abs(lmax))/(1.0*qpoints))*m)+lmin)
-      q(m) = 10.0_dp**(lmin + real(m)/real(qpoints) * (lmax-lmin))
-    end do
-    allocate(qvalues(0:qpoints-1))
-    allocate(pvalues(0:qpoints-1))
-    allocate(q(0:qpoints-1))
     ! call csv_write(43,q,.true.)
     write(43,*) q
     qtrig = .false.
   end if
-  qdiff = 0.0_dp
-  qvalues = 0.0_dp
-  pvalues = 0.0_dp
 
 
   !$OMP PARALLEL DO            &
@@ -435,6 +478,7 @@ subroutine formfactor(lower,upper,nmols)
   do m = 0, qpoints-1
     ! write(6,*) m, q(m)
     dummy_variable = real(upper*nmols,dp)
+    if (debug .eqv. .true.) write(debugf,*) dummy_variable
     do n=1,nmols
       do o=n,nmols
         if (n==o) then
@@ -474,6 +518,7 @@ subroutine formfactor(lower,upper,nmols)
     pvalues(m)=qvalues(m)/((upper*NMol)**2)
   end do
   ! call csv_write(43,pvalues,.true.)
+  write(43,*) pvalues
 end subroutine formfactor
 
 !********************************************!
@@ -485,6 +530,7 @@ subroutine outputtrj(lower,upper,nmols)
   implicit none
   integer(sp),intent(in)::lower,upper,nmols
   integer(sp)::i,j,n
+  if (debug .eqv. .true.) write(debugf,*) "started outputtrj"
   write(44, '(A)') trim(headertext(1)) ! ITEM: TIMESTEP
   write(44,*) timestep(Nstep)
   write(44, '(A)') trim(headertext(2)) ! ITEM: NUMBER OF ATOMS
