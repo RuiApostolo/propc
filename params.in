@@ -6,8 +6,8 @@ t
 t
 t
 5           Number Columns
-5           StepMax
-1           IgnoreFirstSteps
+20001       StepMax
+5001        IgnoreFirstSteps
 1           NMol
 737         MolSize
 6           MolStartType

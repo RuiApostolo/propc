@@ -218,32 +218,32 @@ write(6,*) Nstep
 
 do Nstep=IgnoreFirst+1,stepmax
   if (debug .eqv. .true.) write(debugf,*) "main loop"
-    if (modulo(Nstep,StepOutput) == 0) then
-      call ETIME(tarray,cpu_time_now) ! new clock
-      call texttime(int(cpu_time_now-cpu_time_last),tsl)
-      call texttime(int(cpu_time_now-beg_cpu_time),tss)
-      call texttime(int((cpu_time_now-cpu_time_last)*(((stepmax-Nstep)/100)+1)),eta)
-      write(6,*) "Timestep: ", Nstep, &
-                 "  This iteration: ", tsl, &
-                 "Running for: ", tss, &
-                 "ETA: ", eta
-      cpu_time_last = cpu_time_now
-    end if
-    call readheader
-    call readdata(MolStart,NMol,MolSize,Natom,Columns)
-    if (Nstep==IgnoreFirst+1) then
-      if (debug .eqv. .true.) write(debugf,*) "started hold array"
-      do mol=1,NMol
-        hold(mol,1) = array(mol,1,3)
-        hold(mol,2) = array(mol,1,4)
-        hold(mol,3) = array(mol,1,5)
-      end do
-    end if
-    call molrebuild
-    if (b_rg  .eqv. .true.) call rg(1,molsize,NMol)
-    if (b_ree .eqv. .true.) call ree(1,molsize,NMol)
-    if (b_pq  .eqv. .true.) call formfactor(1,molsize,NMol)
-    if (b_trj .eqv. .true.) call outputtrj(1,molsize,NMol)
+  if (modulo(Nstep,StepOutput) == 0) call timer(Nstep)
+    ! call ETIME(tarray,cpu_time_now) ! new clock
+    ! call texttime(int(cpu_time_now-cpu_time_last),tsl)
+    ! call texttime(int(cpu_time_now-beg_cpu_time),tss)
+    ! call texttime(int((cpu_time_now-cpu_time_last)*(((stepmax-Nstep)/100)+1)),eta)
+    ! write(6,*) "Timestep: ", Nstep, &
+    !            "  This iteration: ", tsl, &
+    !            "Running for: ", tss, &
+    !            "ETA: ", eta
+    ! cpu_time_last = cpu_time_now
+  ! end if
+  call readheader
+  call readdata(MolStart,NMol,MolSize,Natom,Columns)
+  if (Nstep==IgnoreFirst+1) then
+    if (debug .eqv. .true.) write(debugf,*) "started hold array"
+    do mol=1,NMol
+      hold(mol,1) = array(mol,1,3)
+      hold(mol,2) = array(mol,1,4)
+      hold(mol,3) = array(mol,1,5)
+    end do
+  end if
+  call molrebuild
+  if (b_rg  .eqv. .true.) call rg(1,molsize,NMol)
+  if (b_ree .eqv. .true.) call ree(1,molsize,NMol)
+  if (b_pq  .eqv. .true.) call formfactor(1,molsize,NMol)
+  if (b_trj .eqv. .true.) call outputtrj(1,molsize,NMol)
 end do
 
 contains
@@ -633,5 +633,19 @@ subroutine texttime(seconds,ttime)
   write(ttime, '(A)') trim(ADJUSTL(ttemp))
 end subroutine texttime
 
+subroutine timer(steps)
+  ! requires subroutine texttime
+  integer(sp),intent(in)::steps
+  ! call cpu_time(cpu_time_now) ! old clock
+  call ETIME(tarray,cpu_time_now) ! new clock
+  call texttime(int(cpu_time_now-cpu_time_last),tsl)
+  call texttime(int(cpu_time_now-beg_cpu_time),tss)
+  call texttime(int((cpu_time_now-cpu_time_last)*(((stepmax-steps)/100)+1)),eta)
+  write(6,*) "Timestep: ", steps, &
+             "  This iteration: ", tsl, &
+             "Running for: ", tss, &
+             "ETA: ", eta
+  cpu_time_last = cpu_time_now
+end subroutine timer
 
 end program propc
