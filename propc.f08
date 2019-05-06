@@ -6,22 +6,21 @@ program propc
 ! double precision added by Rui Apóstolo in 2019
 ! University of Edinburgh
 use omp_lib
+use M_time, only: ud,du
 use, intrinsic :: iso_fortran_env
 implicit none
 include 'variables.inc'
 
-debug = .true.
+debug = .false.
 if (debug .eqv. .true.) then
   open(unit=debugf, file='debug.log', action='write', status='replace')
   write(6,*) "DEBUG MORE ON - CHECK DEBUG.LOG"
 end if
 
 
-! New clock start
-! going to ignore the array, it gives user and system time in seconds, in this order.
-call ETIME(tarray, beg_cpu_time)
-cpu_time_last = 0.0_dp
-
+! timer base on date_and_time intrinsic function
+call timer(ttime,tbeg)
+tlast=tbeg
 
 ! read from stin so that more than one file can be used
 read(5,*)
@@ -245,6 +244,12 @@ do Nstep=IgnoreFirst+1,stepmax
   if (b_pq  .eqv. .true.) call formfactor(1,molsize,NMol)
   if (b_trj .eqv. .true.) call outputtrj(1,molsize,NMol)
 end do
+
+! End of program clock call
+call ETIME(tarray,end_cpu_time)
+call texttime(int(end_cpu_time - beg_cpu_time), tempw)
+write(6,*) "Total Time: ", ADJUSTL(tempw)
+
 
 contains
 
@@ -600,41 +605,49 @@ function r2str(k) result(str)
 end function r2str
 
 
-!************************************************!
-! Time conversion - Written by Rui Apóstolo      !
-! Converts seconds to hours, minutes and seconds !
-!************************************************!
+!******************************************************!
+! Time conversion - Written by Rui Apóstolo            !
+! Converts seconds to days, hours, minutes and seconds !
+!******************************************************!
 
-subroutine texttime(seconds,ttime)
+subroutine texttime(time,ttime)
   implicit none
-  integer(kind=4)::seconds
-  integer::s,m,h,r
-  character(LEN=20)::ttime,ttemp
+  integer(sp)::d,s,m,h
+  real(dp)::ms
+  real(dp),intent(in)::time
+  character(LEN=20),intent(out)::ttime
+  character(LEN=20)::ttemp
   ttime = ""
   ttemp = ""
+
   s = 0
-  r = 0
   m = 0
   h = 0
-  ! 1234 h 56 min 78 sec
-  s = modulo(seconds,60)
-  r = (seconds - s)/60
-  m = modulo(r,60)
-  h = (r - m)/60
-  if (h == 0) then
-    if (m == 0) then
-      write(ttemp, '(I2.2, A)') s, " seconds"
-    else
-      write(ttemp, '(I2.2, A, I2.2, A)') m, " min ", s, " sec"
-    end if
+  ! 123days 45h 67 min 89 sec 000ms
+  ms = module(time,1.0)
+  s = modulo(int(time-ms),60)
+  m = modulo(int(time-s-ms),3600)
+  h = modulo(int(time-m*60-s-ms),86400)
+  d = floor(int(time)/86400)
+
+  if (d==0) then
+    write(ttemp, '(I4.1, A, I2.2, A, I2.2, A)') d,"d ",h, ":", m, ":", s, ".",ms
   else
-    write(ttemp, '(I4.1, A, I2.2, A, I2.2, A)') h, " h ", m, " min ", s, " sec"
+    write(ttemp, '(I4.1, A, I2.2, A, I2.2, A)') h, ":", m, ":", s, ".",ms
   end if
   write(ttime, '(A)') trim(ADJUSTL(ttemp))
+
 end subroutine texttime
+
+
+
+
+
+
 
 subroutine timer(steps)
   ! requires subroutine texttime
+  intrinsic none
   integer(sp),intent(in)::steps
   ! call cpu_time(cpu_time_now) ! old clock
   call ETIME(tarray,cpu_time_now) ! new clock
@@ -647,5 +660,77 @@ subroutine timer(steps)
              "ETA: ", eta
   cpu_time_last = cpu_time_now
 end subroutine timer
+
+
+
+!********************************************************************!
+! Timer function - Written by Rui Apóstolo                           !
+! Calculates run time based on call date_and_time intrinsic function !
+!********************************************************************!
+
+subroutine timer(text,newtime,begtime,nsteps,dstep,endtime)
+  implicit none
+  character(LEN=20),intent(out)::text
+  integer(kind=4),dimension(8),intent(out)::newtime
+  integer(kind=4),dimension(8),intent(inout),optional::begtime,endtime
+  integer(sp),intent(in),optional::nsteps,dstep
+  integer(kind=4),dimension(8)::tarray
+  character(LEN=20)::temp
+  ! call date_and_time(date, time, zone, values)
+  ! date, CHARACTER*8, Output, Date, in form CCYYMMDD, where CCYY is the four-digit year, MM the two-digit month, and DD the two-digit day of the month. For example: 19980709 
+  ! time, CHARACTER*10, Output, The current time, in the form hhmmss.sss, where hh is the hour, mm minutes, and ss.sss seconds and milliseconds. 
+  ! zone, CHARACTER*5, Output, The time difference with respect to UTC, expressed in hours and minutes, in the form hhmm 
+  ! values,INTEGER*4 VALUES(8), Output,An integer array of 8 elements described below.
+  ! values (1): The year, as a 4-digit integer.
+  ! values (2): The month, as an integer from 1 to 12.
+  ! values (3): The day of the month, as an integer from 1 to 31.
+  ! values (4): The time difference, in minutes, with respect to UTC.
+  ! values (5): The hour of the day, as an integer from 1 to 23.
+  ! values (6): The minutes of the hour, as an integer from 1 to 59.
+  ! values (7): The seconds of the minute, as an integer from 0 to 60.
+  ! values (8): The milliseconds of the second, in range 0 to 999.
+  text = ""
+  temp = ""
+  if (present(endtime)) then
+    call date_and_time(VALUES=newtime)
+    tarray=newtime-endtime
+
+    if (tarray(1:3) > 1) write(6,*) "test successful"
+
+
+
+
+    write(text, '(A)') trim(ADJUSTL(temp))
+
+  else if (present(begtime)) then
+    tarray=newtime
+    call date_and_time(VALUES=newtime)
+    tarray = newtime - tarray
+
+
+
+! just use epoch, this doesn't work
+
+
+
+    if (tarray(5) == 0) then
+      if (tarray(6) == 0) then
+        write(temp, '(I2.2, A, I3.3,A)') tarray(7), '.', tarray(8), " seconds"
+      else
+        write(temp, '(I2.2, A, I2.2, A,I3.3,A)') tarray(6), " m ", tarray(7), '.', tarray(8), " s"
+      end if
+    else
+      write(temp, '(I4.1, A, I2.2, A, I2.2, A,I3.3,A)') tarray(5), " h ", tarray(6), " m ", tarray(7), '.', tarray(8), " s"
+    end if
+    write(text, '(A)') trim(ADJUSTL(temp))
+  else
+    call date_and_time(VALUES=newtime)
+  end if
+
+
+end subroutine timer
+
+
+
 
 end program propc

@@ -22,10 +22,10 @@ logical :: debug,b_rg,b_ree,b_pq,b_trj
 
 ! strings
 character(LEN=80),dimension(4)::headertext
-character::Inputfile*64,Outputprefix*64,userinput*1
+character::Inputfile*64,Outputprefix*64,ttime*20
 
-! New clock variables
-! going to ignore the array, it gives user and system time in seconds, in this order.
-real, dimension(2) :: tarray 
-real(sp) ::  beg_cpu_time, end_cpu_time, cpu_time_now, cpu_time_last
-character(LEN=20)::tempw, tsl, tss, eta
+! For timer using call date_and_time
+integer(kind=4),dimension(8)::tlast,tbeg
+! real, dimension(2) :: tarray 
+! real(sp) ::  beg_cpu_time, end_cpu_time, cpu_time_now, cpu_time_last
+! character(LEN=20)::tempw, tsl, tss, eta

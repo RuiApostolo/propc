@@ -1,5 +1,7 @@
 # propc
 
+Dependency: https://github.com/wavebitscientific/datetime-fortran
+
 This program aims to be a modular toolkit for the calculation of physical properties from MD simulation outputs.
 
 Tools:
@@ -9,6 +11,8 @@ Calculates p(q) from the positions of atoms.
 Rebuilds polymer, removing solvent and PBC.
 
 ## Compile
+
+First, install the datetime-fortran library: https://github.com/wavebitscientific/datetime-fortran
 
 To compile use:
 
