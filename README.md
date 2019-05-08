@@ -3,10 +3,10 @@
 This program aims to be a modular toolkit for the calculation of physical properties from MD simulation outputs.
 
 Tools:
-Calculates Rg from average distance of all atoms.
-Calculates Ree.
-Calculates p(q) from the positions of atoms.
-Rebuilds polymer, removing solvent and PBC.
+- Calculates Rg from average distance of all atoms.
+- Calculates Ree.
+- Calculates p(q) from the positions of atoms.
+- Rebuilds polymer, removing solvent and PBC.
 
 ## Compile
 
