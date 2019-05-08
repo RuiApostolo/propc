@@ -13,7 +13,7 @@ Rebuilds polymer, removing solvent and PBC.
 To compile use:
 
 ```
-f95 -o propc -fopenmp -O3 propc
+gfortran propc.f90 -o propc -fopenmp -O3
 ```
 
 ## Usage
