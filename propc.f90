@@ -13,7 +13,7 @@ include 'variables.inc'
 debug = .true.
 if (debug .eqv. .true.) then
   open(unit=debugf, file='debug.log', action='write', status='replace')
-  write(6,*) "DEBUG MORE ON - CHECK DEBUG.LOG"
+  write(6,*) "DEBUG MODE ON - CHECK DEBUG.LOG"
 end if
 
 
@@ -35,6 +35,8 @@ read(5,'(L6)',iostat=ierror)      b_ree
   if (ierror /= 0) call systemexit("Calculate Ree")
 read(5,'(L6)',iostat=ierror)      b_pq
   if (ierror /= 0) call systemexit("Calculate p(q)")
+read(5,'(L6)',iostat=ierror)      b_ind_pq
+  if (ierror /= 0) call systemexit("Calculate individual p(q)")
 read(5,'(L6)',iostat=ierror)      b_trj
   if (ierror /= 0) call systemexit("Calculate output trajectory")
 read(5,'(I2)',iostat=ierror)      Columns
@@ -65,6 +67,20 @@ if (Inputfile == "") then
   write(6,*) "No name for input file given."
   ! see /usr/include/sysexits.h for error codes
   call EXIT(65)
+end if
+if (b_ind_pq .eqv. .true. .and. b_pq .eqv. .false.) then
+  write(6,*) "Individual P(q) requires normal P(q) calculation. Continue?"
+  read(5,*)  answer
+  call userexit(answer)
+  b_pq = .true.
+  write(6,*) "bool_calc_pq set to true"
+end if
+if (b_ind_pq .eqv. .true. .and. NMol < 2) then
+  write(6,*) "Individual P(q) only valid for systems with more than one molecule. Continue?"
+  read(5,*)  answer
+  call userexit(answer)
+  b_ind_pq = .false.
+  write(6,*) "bool_calc_individual_pq set to false"
 end if
 if (Columns < 5) then
   write(6,*) "'Columns' line in params.in must be an integer bigger than 4. X, Y and Z should be on rows 3, 4 and 5, respectively."
@@ -143,6 +159,7 @@ write(6,*)
 call decwrite(b_rg,"Rg")
 call decwrite(b_ree,"Ree")
 call decwrite(b_pq,"p(q)")
+call decwrite(b_ind_pq,"individual p(q)")
 call decwrite(b_trj,"Edited trj file")
 write(6,*)      "Number of Rows in input file:           ",trim(i2str(Columns))
 write(6,*)      "Last step number:                       ",trim(i2str(StepMax))
@@ -159,8 +176,13 @@ if (debug .eqv. .true.) write(debugf,*) "Input done"
 
 ! allocate arrays
 allocate(timestep(stepmax))
-allocate(array(NMol,MolSize,Columns))
+! allocate(array(NMol,MolSize,Columns)) ! deprecated
+allocate(array(Columns,MolSize,NMol))
 allocate(hold(NMol,3))
+allocate(total_pq(0:qpoints-1))
+allocate(ind_pq(0:qpoints-1))
+total_pq = 0.0_dp
+ind_pq = 0.0_dp
 if (debug .eqv. .true.) write(debugf,*) "allocated variables"
 ! open input file
 open(inputf,file=Inputfile,action='read',status='old')
@@ -184,8 +206,11 @@ end if
 if (b_pq  .eqv. .true.) then
   open(unit=43, file='pq.dat', action='write', status='new')
 end if
+if (b_ind_pq  .eqv. .true.) then
+  open(unit=45, file='pq_ind.dat', action='write', status='new')
+end if
 if (b_trj .eqv. .true.) then
-  open(unit=44, file='processed.lammpstrj', action='write', status='new')
+  open(unit=44, file=trim(adjustl(Outputprefix//"processed.lammpstrj")), action='write', status='new')
 end if
 
 
@@ -234,17 +259,30 @@ do Nstep=IgnoreFirst+1,stepmax
   if (Nstep==IgnoreFirst+1) then
     if (debug .eqv. .true.) write(debugf,*) "started hold array"
     do mol=1,NMol
-      hold(mol,1) = array(mol,1,3)
-      hold(mol,2) = array(mol,1,4)
-      hold(mol,3) = array(mol,1,5)
+      hold(mol,1) = array(3,1,mol)
+      hold(mol,2) = array(4,1,mol)
+      hold(mol,3) = array(5,1,mol)
     end do
   end if
   call molrebuild
   if (b_rg  .eqv. .true.) call rg(1,molsize,NMol)
   if (b_ree .eqv. .true.) call ree(1,molsize,NMol)
-  if (b_pq  .eqv. .true.) call formfactor(1,molsize,NMol)
+  if (b_pq  .eqv. .true. .and. b_ind_pq .eqv. .false.) call formfactor(1,molsize,NMol,total_pq)
+  if (b_pq  .eqv. .true. .and. b_ind_pq .eqv. .true.) call formfactor(1,molsize,NMol,total_pq,ind_pq)
   if (b_trj .eqv. .true.) call outputtrj(1,molsize,NMol)
 end do
+
+if (b_pq .eqv. .true.) then
+  do l=0,qpoints-1
+    write(43,*) 10.0_dp**(lmin + real(l)/real(qpoints) * (lmax-lmin)), total_pq(l)
+  end do
+end if
+
+if (b_ind_pq .eqv. .true.) then
+  do l=0,qpoints-1
+    write(45,*) 10.0_dp**(lmin + real(l)/real(qpoints) * (lmax-lmin)), ind_pq(l)
+  end do
+end if
 
 contains
 
@@ -326,11 +364,11 @@ subroutine readdata(mstart,nmols,msize,atoms,col)
     if (debug .eqv. .true.) write(debugf,*) i, dummy
     if (int(dummy(2)) == mstart) then
       if (debug .eqv. .true.) write(debugf,*) "went to readdata molecule loop"
-      array(n,k,1:col) = dummy(1:col)
+      array(1:col,k,n) = dummy(1:col)
       ! if (debug .eqv. .true.) write(debugf,*) (array(n,k,j),j=1,col)
         ! if (debug .eqv. .true.) write(debugf,*) (array(n,k,j),j=1,col)
       molloop: do k=2,msize
-        read(inputf,*) (array(n,k,j),j=1,col)
+        read(inputf,*) (array(j,k,n),j=1,col)
         ! if (debug .eqv. .true.) write(debugf,*) (array(n,k,j),j=1,col)
       end do molloop
       ! if (debug .eqv. .true.) then
@@ -356,37 +394,37 @@ subroutine molrebuild
   if (debug .eqv. .true.) write(debugf,*) "started molrebuild"
   do n=1,NMol
   ! to avoid clipping of first atom
-    if (array(n,1,3) >= hold(n,1)+Hx) then
-      array(n,1,3) = array(n,1,3) - Lx
-      else if (array(n,1,3) <= hold(n,1)-Hx) then
-      array(n,1,3) = array(n,1,3) + Lx
+    if (array(3,1,n) >= hold(n,1)+Hx) then
+      array(3,1,n) = array(3,1,n) - Lx
+      else if (array(3,1,n) <= hold(n,1)-Hx) then
+      array(3,1,n) = array(3,1,n) + Lx
     end if
-    hold(n,1) = array(n,1,3)
+    hold(n,1) = array(3,1,n)
     
-    if (array(n,1,4) >= hold(n,2)+Hy) then
-      array(n,1,4) = array(n,1,4) - Ly
-      else if (array(n,1,4) <= hold(n,2)-Hy) then
-      array(n,1,4) = array(n,1,4) + Ly
+    if (array(4,1,n) >= hold(n,2)+Hy) then
+      array(4,1,n) = array(4,1,n) - Ly
+      else if (array(4,1,n) <= hold(n,2)-Hy) then
+      array(4,1,n) = array(4,1,n) + Ly
     end if
-    hold(n,2) = array(n,1,4)
+    hold(n,2) = array(4,1,n)
     
-    if (array(n,1,5) >= hold(n,3)+Hz) then
-      array(n,1,5) = array(n,1,5) - Lz
-      else if (array(n,1,5) <= hold(n,3)-Hz) then
-      array(n,1,5) = array(n,1,5) + Lz
+    if (array(5,1,n) >= hold(n,3)+Hz) then
+      array(5,1,n) = array(5,1,n) - Lz
+      else if (array(5,1,n) <= hold(n,3)-Hz) then
+      array(5,1,n) = array(5,1,n) + Lz
     end if
-    hold(n,3) = array(n,1,5)
+    hold(n,3) = array(5,1,n)
     
     do i=2,molsize
-      array(n,i,3) = array(n,i,3) - array(n,i-1,3)
-      array(n,i,4) = array(n,i,4) - array(n,i-1,4)
-      array(n,i,5) = array(n,i,5) - array(n,i-1,5)
-      array(n,i,3) = array(n,i,3) - Lx*anint(array(n,i,3)/Lx)
-      array(n,i,4) = array(n,i,4) - Ly*anint(array(n,i,4)/Ly)
-      array(n,i,5) = array(n,i,5) - Lz*anint(array(n,i,5)/Lz)
-      array(n,i,3) = array(n,i-1,3) + array(n,i,3)
-      array(n,i,4) = array(n,i-1,4) + array(n,i,4)
-      array(n,i,5) = array(n,i-1,5) + array(n,i,5)
+      array(3,i,n) = array(3,i,n) - array(3,i-1,n)
+      array(4,i,n) = array(4,i,n) - array(4,i-1,n)
+      array(5,i,n) = array(5,i,n) - array(5,i-1,n)
+      array(3,i,n) = array(3,i,n) - Lx*anint(array(3,i,n)/Lx)
+      array(4,i,n) = array(4,i,n) - Ly*anint(array(4,i,n)/Ly)
+      array(5,i,n) = array(5,i,n) - Lz*anint(array(5,i,n)/Lz)
+      array(3,i,n) = array(3,i-1,n) + array(3,i,n)
+      array(4,i,n) = array(4,i-1,n) + array(4,i,n)
+      array(5,i,n) = array(5,i-1,n) + array(5,i,n)
     end do
   end do
 end subroutine molrebuild
@@ -407,9 +445,9 @@ subroutine rg(lower,upper,nmols)
     rdiff = 0.0_dp
       do j=lower,upper-1
         do k=j+1,upper
-          xi = array(n,j,3) - array(n,k,3)
-          yi = array(n,j,4) - array(n,k,4)
-          zi = array(n,j,5) - array(n,k,5)
+          xi = array(3,j,n) - array(3,k,n)
+          yi = array(4,j,n) - array(4,k,n)
+          zi = array(5,j,n) - array(5,k,n)
           rdiff = rdiff + xi**2.0_dp + yi**2.0_dp + zi**2.0_dp
         end do
       end do
@@ -431,9 +469,9 @@ subroutine ree(lower,upper,nmols)
   if (debug .eqv. .true.) write(debugf,*) "started ree"
   write(42,"(i0,a)",advance="no") Nstep, ' '
   do i=1,nmols
-    xi = array(i,upper,3) - array(i,lower,3)
-    yi = array(i,upper,4) - array(i,lower,4)
-    zi = array(i,upper,5) - array(i,lower,5)
+    xi = array(3,upper,i) - array(3,lower,i)
+    yi = array(4,upper,i) - array(4,lower,i)
+    zi = array(5,upper,i) - array(5,lower,i)
     reetot = 1.0_dp*sqrt(xi**2.0_dp + yi**2.0_dp + zi**2.0_dp)
     write(42,"(f0.6,a)",advance="no") reetot, ' '
   end do
@@ -445,80 +483,94 @@ end subroutine ree
 ! appended by Joanna Faulds to account for the minimum image convention.!
 !***********************************************************************!
 
-subroutine formfactor(lower,upper,nmols)
+subroutine formfactor(lower,upper,nmols,t_pq,i_pq)
   implicit none
   integer(sp),intent(in)::lower,upper,nmols
-  real(dp):: xj, yj, zj, qdiff, dummy_variable
-  real(dp),dimension(:),allocatable::qvalues,pvalues,q
+  real(dp),dimension(:),allocatable,intent(inout)::t_pq
+  real(dp),dimension(:),allocatable,intent(inout),optional::i_pq
+  real(dp):: xj, yj, zj, qdiff, temp
+  real(dp),dimension(:),allocatable::qvalues,pvalues,q,dummy_variable,ind_qvalues,ind_pvalues
   integer(sp):: j,k,m,n,o
   if (debug .eqv. .true.) write(debugf,*) "started formfactor"
   allocate(qvalues(0:qpoints-1))
   allocate(pvalues(0:qpoints-1))
+  allocate(ind_qvalues(0:qpoints-1))
+  allocate(ind_pvalues(0:qpoints-1))
   allocate(q(0:qpoints-1))
+  allocate(dummy_variable(0:qpoints-1))
   qdiff = 0.0_dp
   qvalues = 0.0_dp
   pvalues = 0.0_dp
   q = 0.0_dp
   do m=0,qpoints-1
     ! q(m) = 10.0**((1.0*((abs(lmin)+abs(lmax))/(1.0*qpoints))*m)+lmin)
-    q(m) = 10.0_dp**(lmin + real(m)/real(qpoints) * (lmax-lmin))
+    q(m) = 10.0_dp**(lmin + real(m,dp)/real(qpoints,dp) * (lmax-lmin))
   end do
   if (qtrig .eqv. .true.) then
     ! call csv_write(43,q,.true.)
-    write(43,*) q
+    ! write(43,*) q
     qtrig = .false.
   end if
 
+    ! temp = real(upper*nmols,dp)
+    ! dummy_variable = real(upper*nmols,dp)
+    qvalues = real(upper*nmols,dp)
 
   !$OMP PARALLEL DO            &
   !$OMP SCHEDULE(STATIC)      &
   !$OMP DEFAULT(SHARED)        &
   !$OMP PRIVATE(m, dummy_variable, j, k, xj, yj, zj, qdiff,o,n) 
 
-  do m = 0, qpoints-1
+  ! do m = 0, qpoints-1
     ! write(6,*) m, q(m)
-    dummy_variable = real(upper*nmols,dp)
-    if (debug .eqv. .true.) write(debugf,*) dummy_variable
+    ! if (debug .eqv. .true.) write(debugf,*) dummy_variable
     do n=1,nmols
       do o=n,nmols
         if (n==o) then
           do j = lower,upper-1 
             do k = j+1,upper
-                xj    = array(n,j,3) - array(o,k,3)
-                xj= xj - Lx*anint(xj/Lx)
-                yj    = array(n,j,4) - array(o,k,4)
-                yj= yj - Ly*anint(yj/Ly)
-                zj    = array(n,j,5) - array(o,k,5)
-                zj= zj - Lz*anint(zj/Lz)
-                qdiff = 1.0_dp*sqrt(xj**2 + yj**2 + zj**2)
-                dummy_variable  = dummy_variable + 2.0_dp * sin(q(m)*qdiff)/(q(m)*qdiff)
+                xj    = array(3,j,n) - array(3,k,o)
+                xj= xj - real(Lx*anint(xj/Lx),dp)
+                yj    = array(4,j,n) - array(4,k,o)
+                yj= yj - real(Ly*anint(yj/Ly),dp)
+                zj    = array(5,j,n) - array(5,k,o)
+                zj= zj - real(Lz*anint(zj/Lz),dp)
+                qdiff = 1.0_dp*sqrt(xj**2.0_dp + yj**2.0_dp + zj**2.0_dp)
+                qvalues  = qvalues + 2.0_dp * sin(q*qdiff)/(q*qdiff)
+                ind_qvalues = ind_qvalues + 2.0_dp * sin(q*qdiff)/(q*qdiff)
             end do
           end do
         else
           do j = lower,upper
             do k = lower,upper
-                xj    = array(n,j,3) - array(o,k,3)
-                xj= xj - Lx*anint(xj/Lx)
-                yj    = array(n,j,4) - array(o,k,4)
-                yj= yj - Ly*anint(yj/Ly)
-                zj    = array(n,j,5) - array(o,k,5)
-                zj= zj - Lz*anint(zj/Lz)
-                qdiff = 1.0_dp*sqrt(xj**2 + yj**2 + zj**2)
-                dummy_variable  = dummy_variable + 2.0_dp * sin(q(m)*qdiff)/(q(m)*qdiff)
+                xj    = array(3,j,n) - array(3,k,o)
+                xj= xj - real(Lx*anint(xj/Lx),dp)
+                yj    = array(4,j,n) - array(4,k,o)
+                yj= yj - real(Ly*anint(yj/Ly),dp)
+                zj    = array(5,j,n) - array(5,k,o)
+                zj= zj - real(Lz*anint(zj/Lz),dp)
+                qdiff = 1.0_dp*sqrt(xj**2.0_dp + yj**2.0_dp + zj**2.0_dp)
+                qvalues  = qvalues + 2.0_dp * sin(q*qdiff)/(q*qdiff)
+                ! ind_qvalues = ind_qvalues + 2.0_dp * sin(q*qdiff)/(q*qdiff)
             end do
           end do
         end if
       end do
+      ind_pvalues = ind_pvalues + ind_qvalues / real((nmols*upper)**2,dp)
     end do
-    qvalues(m) = dummy_variable
-  end do
+  ! end do
   !$OMP END PARALLEL DO
+    ! qvalues = dummy_variable
 
-  do m=0,qpoints-1
-    pvalues(m)=qvalues(m)/((upper*NMol)**2)
-  end do
+  ! do m=0,qpoints-1
+    pvalues=qvalues/real(((upper*NMol)**2),dp)
+  ! end do
   ! call csv_write(43,pvalues,.true.)
-  write(43,*) pvalues
+  ! write(43,*) pvalues
+  ! save to array instead
+  t_pq = t_pq + pvalues/real(StepMax-IgnoreFirst,dp)
+  i_pq = i_pq + ind_pvalues/real(StepMax-IgnoreFirst,dp)
+
 end subroutine formfactor
 
 !********************************************!
@@ -542,7 +594,7 @@ subroutine outputtrj(lower,upper,nmols)
   write(44, '(A)') trim(headertext(4)) ! ITEM: ATOMS id type x y z
   do n=1,nmols
     do i=lower,upper
-      write(44,*) int(array(n,i,1)), int(array(n,i,2)), (array(n,i,j),j=3,Columns)
+      write(44,*) int(array(1,i,n)), int(array(2,i,n)), (array(j,i,n),j=3,Columns)
     end do
   end do
 end subroutine outputtrj
@@ -647,5 +699,22 @@ subroutine timer(steps)
              "ETA: ", eta
   cpu_time_last = cpu_time_now
 end subroutine timer
+
+!********************************************
+! Exits program by user choice - Rui Apóstolo
+!********************************************
+
+subroutine userexit(answer)
+  character,intent(in) :: answer*1
+  select case(answer)
+    case("y")
+      write(6,*) "Program continuing by your choice."
+    case("Y")
+      write(6,*) "Program continuing by your choice."
+    case default
+      write(6,*) "Program exit by your choice."
+      call EXIT(0)
+  end select
+end subroutine userexit
 
 end program propc

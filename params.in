@@ -1,14 +1,15 @@
 # Be careful of ammount of spaces (min col 12)
-dump.npt.lammpstrj
+/home/rfapostolo/data/3.pe-pp.p.ch/2.end/11.8polymers/dump.npt.lammpstrj
 
 t
 t
 t
 t
+t
 5           Number Columns
-20001       StepMax
-5001        IgnoreFirstSteps
-1           NMol
+100         StepMax
+0           IgnoreFirstSteps
+8           NMol
 737         MolSize
 6           MolStartType
 50          StepOutput
