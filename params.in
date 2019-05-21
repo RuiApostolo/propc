@@ -1,11 +1,11 @@
 # Be careful of ammount of spaces (min col 12)
 /home/rfapostolo/data/3.pe-pp.p.ch/2.end/11.8polymers/dump.npt.lammpstrj
 
-t
-t
-t
-t
-t
+t           Calculate Rg?
+t           Calculate Ree?
+t           Calculate P(q)?
+f           Calculate Individual P(q)?
+t           Write output trajectory?
 5           Number Columns
 100         StepMax
 0           IgnoreFirstSteps

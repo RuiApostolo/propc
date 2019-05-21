@@ -11,7 +11,7 @@ use, intrinsic :: iso_fortran_env
 implicit none
 include 'variables.inc'
 
-debug = .true.
+debug = .false.
 if (debug .eqv. .true.) then
   open(unit=debugf, file='debug.log', action='write', status='replace')
   write(6,*) "DEBUG MODE ON - CHECK DEBUG.LOG"
@@ -27,41 +27,69 @@ cpu_time_last = 0.0_dp
 ! read from stin so that more than one file can be used
 read(5,*)
 read(5,'(a)',iostat=ierror)  Inputfile
+  if (debug .eqv. .true.) write(debugf,*) "Inputfile", Inputfile
   if (ierror /= 0) call systemexit("Input file")
 read(5,'(a)',iostat=ierror)  Outputprefix
+  if (debug .eqv. .true.) write(debugf,*) "Outputprefix", Outputprefix
   if (ierror /= 0) call systemexit("Output file")
 read(5,'(L6)',iostat=ierror)      b_rg
+  if (debug .eqv. .true.) write(debugf,*) "b_rg", b_rg
   if (ierror /= 0) call systemexit("Calculate Rg")
 read(5,'(L6)',iostat=ierror)      b_ree
+  if (debug .eqv. .true.) write(debugf,*) "b_ree", b_ree
   if (ierror /= 0) call systemexit("Calculate Ree")
 read(5,'(L6)',iostat=ierror)      b_pq
+  if (debug .eqv. .true.) write(debugf,*) "b_pq", b_pq
   if (ierror /= 0) call systemexit("Calculate p(q)")
 read(5,'(L6)',iostat=ierror)      b_ind_pq
+  if (debug .eqv. .true.) write(debugf,*) "b_ind_pq", b_ind_pq
   if (ierror /= 0) call systemexit("Calculate individual p(q)")
 read(5,'(L6)',iostat=ierror)      b_trj
+  if (debug .eqv. .true.) write(debugf,*) "b_trj", b_trj
   if (ierror /= 0) call systemexit("Calculate output trajectory")
 read(5,'(I2)',iostat=ierror)      Columns
+  if (debug .eqv. .true.) write(debugf,*) "Columns", Columns
   if (ierror /= 0) call systemexit("Columns")
 read(5,'(I6)',iostat=ierror)      StepMax
+  if (debug .eqv. .true.) write(debugf,*) "StepMax", StepMax
   if (ierror /= 0) call systemexit("StepMax")
 read(5,'(I6)',iostat=ierror)      IgnoreFirst
+  if (debug .eqv. .true.) write(debugf,*) "IgnoreFirst", IgnoreFirst
   if (ierror /= 0) call systemexit("IgnoreFirst")
 read(5,'(I6)',iostat=ierror)      NMol
+  if (debug .eqv. .true.) write(debugf,*) "NMol", NMol
   if (ierror /= 0) call systemexit("NMol")
 read(5,'(I6)',iostat=ierror)      MolSize
+  if (debug .eqv. .true.) write(debugf,*) "MolSize", MolSize
   if (ierror /= 0) call systemexit("MolSize")
 read(5,'(I6)',iostat=ierror)      MolStart
+  if (debug .eqv. .true.) write(debugf,*) "MolStart", MolStart
   if (ierror /= 0) call systemexit("MolStart")
 read(5,'(I6)',iostat=ierror)      StepOutput
+  if (debug .eqv. .true.) write(debugf,*) "StepOutput", StepOutput
   if (ierror /= 0) call systemexit("StepOutput")
 read(5,'(E6.0)',iostat=ierror)      lmin
+  if (debug .eqv. .true.) write(debugf,*) "lmin", lmin
   if (ierror /= 0) call systemexit("lmin")
 read(5,'(E6.0)',iostat=ierror)      lmax
+  if (debug .eqv. .true.) write(debugf,*) "lmax", lmax
   if (ierror /= 0) call systemexit("lmax")
 read(5,'(I6)',iostat=ierror)      qpoints
+  if (debug .eqv. .true.) write(debugf,*) "qpoints", qpoints
   if (ierror /= 0) call systemexit("qpoints")
 read(5,'(a)',iostat=ierror)
   if (ierror >= 0) call systemexit("Too many arguments in inputfile")
+
+
+if (debug .eqv. .true.) then
+  write(debugf,*) 
+  write(debugf,*) 
+  write(debugf,*) "b_pq", b_pq
+  write(debugf,*) "b_ind_pq", b_ind_pq
+  write(debugf,*) b_pq .and. b_ind_pq
+end if
+
+
 
 ! Input sanity checks
 if (Inputfile == "") then
@@ -69,19 +97,19 @@ if (Inputfile == "") then
   ! see /usr/include/sysexits.h for error codes
   call EXIT(65)
 end if
-if (b_ind_pq .eqv. .true. .and. b_pq .eqv. .false.) then
-  write(6,*) "Individual P(q) requires normal P(q) calculation. Continue?"
-  read(5,*)  answer
-  call userexit(answer)
+if ((b_ind_pq .eqv. .true.) .and. (b_pq .eqv. .false.)) then
+  write(6,*) "Individual P(q) requires normal P(q) calculation. Changed b_pq to true."
+  ! read(5,*)  answer
+  ! call userexit(answer)
   b_pq = .true.
-  write(6,*) "bool_calc_pq set to true"
+  ! write(6,*) "bool_calc_pq set to true"
 end if
-if (b_ind_pq .eqv. .true. .and. NMol < 2) then
-  write(6,*) "Individual P(q) only valid for systems with more than one molecule. Continue?"
-  read(5,*)  answer
-  call userexit(answer)
+if ((b_ind_pq .eqv. .true.) .and. (NMol < 2)) then
+  write(6,*) "Individual P(q) only valid for systems with more than one molecule. Changed b_ind_q to false."
+  ! read(5,*)  answer
+  ! call userexit(answer)
   b_ind_pq = .false.
-  write(6,*) "bool_calc_individual_pq set to false"
+  ! write(6,*) "bool_calc_individual_pq set to false"
 end if
 if (Columns < 5) then
   write(6,*) "'Columns' line in params.in must be an integer bigger than 4. X, Y and Z should be on rows 3, 4 and 5, respectively."
@@ -180,10 +208,14 @@ allocate(timestep(stepmax))
 ! allocate(array(NMol,MolSize,Columns)) ! deprecated
 allocate(array(Columns,MolSize,NMol))
 allocate(hold(NMol,3))
-allocate(total_pq(0:qpoints-1))
-allocate(ind_pq(0:qpoints-1))
-total_pq = 0.0_dp
-ind_pq = 0.0_dp
+if (b_pq .eqv. .true.) then
+  allocate(total_pq(0:qpoints-1))
+  total_pq = 0.0_dp
+end if
+if (b_ind_pq .eqv. .true.) then
+  allocate(ind_pq(0:qpoints-1))
+  ind_pq = 0.0_dp
+end if
 if (debug .eqv. .true.) write(debugf,*) "allocated variables"
 ! open input file
 open(inputf,file=Inputfile,action='read',status='old')
@@ -268,8 +300,8 @@ do Nstep=IgnoreFirst+1,stepmax
   call molrebuild
   if (b_rg  .eqv. .true.) call rg(1,molsize,NMol)
   if (b_ree .eqv. .true.) call ree(1,molsize,NMol)
-  if (b_pq  .eqv. .true. .and. b_ind_pq .eqv. .false.) call formfactor(1,molsize,NMol,total_pq)
-  if (b_pq  .eqv. .true. .and. b_ind_pq .eqv. .true.) call formfactor(1,molsize,NMol,total_pq,ind_pq)
+  if ((b_pq  .eqv. .true.) .and. (b_ind_pq .eqv. .false.)) call formfactor(1,molsize,NMol,total_pq)
+  if ((b_pq  .eqv. .true.) .and. (b_ind_pq .eqv. .true.)) call formfactor(1,molsize,NMol,total_pq,ind_pq)
   if (b_trj .eqv. .true.) call outputtrj(1,molsize,NMol)
 end do
 
@@ -479,6 +511,9 @@ subroutine ree(lower,upper,nmols)
   write(42,"(A)") ' '
 end subroutine ree
 
+
+
+
 !***********************************************************************!
 ! Form Factor calculation - Written by Rui Apóstolo                     !
 ! appended by Joanna Faulds to account for the minimum image convention.!
@@ -495,8 +530,10 @@ subroutine formfactor(lower,upper,nmols,t_pq,i_pq)
   if (debug .eqv. .true.) write(debugf,*) "started formfactor"
   allocate(qvalues(0:qpoints-1))
   allocate(pvalues(0:qpoints-1))
-  allocate(ind_qvalues(0:qpoints-1))
-  allocate(ind_pvalues(0:qpoints-1))
+  if (present(i_pq)) then
+    allocate(ind_qvalues(0:qpoints-1))
+    allocate(ind_pvalues(0:qpoints-1))
+  end if
   allocate(q(0:qpoints-1))
   qdiff = 0.0_dp
   qvalues = 0.0_dp
@@ -509,6 +546,7 @@ subroutine formfactor(lower,upper,nmols,t_pq,i_pq)
 
     qvalues = real(upper*nmols,dp)
 
+if (present(i_pq)) then
   !$OMP PARALLEL DO            &
   !$OMP SCHEDULE(AUTO)      &
   !$OMP DEFAULT(none)        &
@@ -551,12 +589,54 @@ subroutine formfactor(lower,upper,nmols,t_pq,i_pq)
       end do
     end do
   !$OMP END PARALLEL DO
-
   ind_pvalues = ind_qvalues / real(nmols*upper**2,dp)
   pvalues= qvalues / real(((upper*NMol)**2),dp)
   t_pq = t_pq + pvalues/real(StepMax-IgnoreFirst,dp)
   i_pq = i_pq + ind_pvalues/real(StepMax-IgnoreFirst,dp)
-
+else
+  !$OMP PARALLEL DO            &
+  !$OMP SCHEDULE(AUTO)      &
+  !$OMP DEFAULT(none)        &
+  !$OMP SHARED(array,q, Lx, Ly, Lz, nmols, lower, upper) &
+  !$OMP PRIVATE(j, k, xj, yj, zj, qdiff,o,n) &
+  !$OMP REDUCTION(+:qvalues)
+    ! write(6,*) m, q(m)
+    ! if (debug .eqv. .true.) write(debugf,*) dummy_variable
+    do n=1,nmols
+      do o=n,nmols
+        if (n==o) then
+          do j = lower,upper-1 
+            do k = j+1,upper
+                xj    = array(3,j,n) - array(3,k,o)
+                xj= xj - real(Lx*anint(xj/Lx),dp)
+                yj    = array(4,j,n) - array(4,k,o)
+                yj= yj - real(Ly*anint(yj/Ly),dp)
+                zj    = array(5,j,n) - array(5,k,o)
+                zj= zj - real(Lz*anint(zj/Lz),dp)
+                qdiff = 1.0_dp*dsqrt(xj**2.0_dp + yj**2.0_dp + zj**2.0_dp)
+                qvalues  = qvalues + 2.0_dp * sin(q*qdiff)/(q*qdiff)
+            end do
+          end do
+        else
+          do j = lower,upper
+            do k = lower,upper
+                xj    = array(3,j,n) - array(3,k,o)
+                xj= xj - real(Lx*anint(xj/Lx),dp)
+                yj    = array(4,j,n) - array(4,k,o)
+                yj= yj - real(Ly*anint(yj/Ly),dp)
+                zj    = array(5,j,n) - array(5,k,o)
+                zj= zj - real(Lz*anint(zj/Lz),dp)
+                qdiff = 1.0_dp*dsqrt(xj**2.0_dp + yj**2.0_dp + zj**2.0_dp)
+                qvalues  = qvalues + 2.0_dp * sin(q*qdiff)/(q*qdiff)
+            end do
+          end do
+        end if
+      end do
+    end do
+  !$OMP END PARALLEL DO
+  pvalues= qvalues / real(((upper*NMol)**2),dp)
+  t_pq = t_pq + pvalues/real(StepMax-IgnoreFirst,dp)
+end if
 end subroutine formfactor
 
 !********************************************!
