@@ -17,7 +17,7 @@ integer(sp)::l,ierror,Natom,Nstep,NMol,mol,qpoints,inputf=20,debugf=90
 integer(sp)::Columns,StepMax,IgnoreFirst,Molsize,MolStart,StepOutput
 
 ! logicals
-logical :: qtrig=.true.
+! logical :: qtrig=.true.
 logical :: debug,b_rg,b_ree,b_pq,b_trj,b_ind_pq
 
 ! strings

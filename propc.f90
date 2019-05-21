@@ -5,6 +5,7 @@ program propc
 ! the file was modified and adapted by Joanna Faulds in 2019
 ! double precision added by Rui Apóstolo in 2019
 ! University of Edinburgh
+! version 2.0
 use omp_lib
 use, intrinsic :: iso_fortran_env
 implicit none
@@ -488,8 +489,8 @@ subroutine formfactor(lower,upper,nmols,t_pq,i_pq)
   integer(sp),intent(in)::lower,upper,nmols
   real(dp),dimension(:),allocatable,intent(inout)::t_pq
   real(dp),dimension(:),allocatable,intent(inout),optional::i_pq
-  real(dp):: xj, yj, zj, qdiff, temp
-  real(dp),dimension(:),allocatable::qvalues,pvalues,q,dummy_variable,ind_qvalues,ind_pvalues
+  real(dp):: xj, yj, zj, qdiff
+  real(dp),dimension(:),allocatable::qvalues,pvalues,q,ind_qvalues,ind_pvalues
   integer(sp):: j,k,m,n,o
   if (debug .eqv. .true.) write(debugf,*) "started formfactor"
   allocate(qvalues(0:qpoints-1))
@@ -506,25 +507,19 @@ subroutine formfactor(lower,upper,nmols,t_pq,i_pq)
     ! q(m) = 10.0**((1.0*((abs(lmin)+abs(lmax))/(1.0*qpoints))*m)+lmin)
     q(m) = 10.0_dp**(lmin + real(m,dp)/real(qpoints,dp) * (lmax-lmin))
   end do
-  if (qtrig .eqv. .true.) then
-    ! call csv_write(43,q,.true.)
-    ! write(43,*) q
-    qtrig = .false.
-  end if
 
-    ! temp = real(upper*nmols,dp)
-    ! dummy_variable = real(upper*nmols,dp)
     qvalues = real(upper*nmols,dp)
 
   !$OMP PARALLEL DO            &
-  !$OMP SCHEDULE(STATIC)      &
-  !$OMP DEFAULT(SHARED)        &
-  !$OMP PRIVATE(m, dummy_variable, j, k, xj, yj, zj, qdiff,o,n) 
-
-  ! do m = 0, qpoints-1
+  !$OMP SCHEDULE(AUTO)      &
+  !$OMP DEFAULT(none)        &
+  !$OMP SHARED(array,q, Lx, Ly, Lz, nmols, lower, upper) &
+  !$OMP PRIVATE(j, k, xj, yj, zj, qdiff,o,n) &
+  !$OMP REDUCTION(+:qvalues,ind_qvalues)
     ! write(6,*) m, q(m)
     ! if (debug .eqv. .true.) write(debugf,*) dummy_variable
     do n=1,nmols
+      ind_qvalues = real(upper*nmols,dp)
       do o=n,nmols
         if (n==o) then
           do j = lower,upper-1 
@@ -535,7 +530,7 @@ subroutine formfactor(lower,upper,nmols,t_pq,i_pq)
                 yj= yj - real(Ly*anint(yj/Ly),dp)
                 zj    = array(5,j,n) - array(5,k,o)
                 zj= zj - real(Lz*anint(zj/Lz),dp)
-                qdiff = 1.0_dp*sqrt(xj**2.0_dp + yj**2.0_dp + zj**2.0_dp)
+                qdiff = 1.0_dp*dsqrt(xj**2.0_dp + yj**2.0_dp + zj**2.0_dp)
                 qvalues  = qvalues + 2.0_dp * sin(q*qdiff)/(q*qdiff)
                 ind_qvalues = ind_qvalues + 2.0_dp * sin(q*qdiff)/(q*qdiff)
             end do
@@ -549,25 +544,17 @@ subroutine formfactor(lower,upper,nmols,t_pq,i_pq)
                 yj= yj - real(Ly*anint(yj/Ly),dp)
                 zj    = array(5,j,n) - array(5,k,o)
                 zj= zj - real(Lz*anint(zj/Lz),dp)
-                qdiff = 1.0_dp*sqrt(xj**2.0_dp + yj**2.0_dp + zj**2.0_dp)
+                qdiff = 1.0_dp*dsqrt(xj**2.0_dp + yj**2.0_dp + zj**2.0_dp)
                 qvalues  = qvalues + 2.0_dp * sin(q*qdiff)/(q*qdiff)
-                ! ind_qvalues = ind_qvalues + 2.0_dp * sin(q*qdiff)/(q*qdiff)
             end do
           end do
         end if
       end do
-      ind_pvalues = ind_pvalues + ind_qvalues / real((nmols*upper)**2,dp)
     end do
-  ! end do
   !$OMP END PARALLEL DO
-    ! qvalues = dummy_variable
 
-  ! do m=0,qpoints-1
-    pvalues=qvalues/real(((upper*NMol)**2),dp)
-  ! end do
-  ! call csv_write(43,pvalues,.true.)
-  ! write(43,*) pvalues
-  ! save to array instead
+  ind_pvalues = ind_qvalues / real(nmols*upper**2,dp)
+  pvalues= qvalues / real(((upper*NMol)**2),dp)
   t_pq = t_pq + pvalues/real(StepMax-IgnoreFirst,dp)
   i_pq = i_pq + ind_pvalues/real(StepMax-IgnoreFirst,dp)
 
