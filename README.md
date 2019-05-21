@@ -5,7 +5,8 @@ This program aims to be a modular toolkit for the calculation of physical proper
 Tools:
 - Calculates Rg from average distance of all atoms.
 - Calculates Ree.
-- Calculates p(q) from the positions of atoms.
+- Calculates p(q) from the positions of atoms for one or more molecules.
+- Calculates individual p(q) from the positions of atoms for individual molecules in multi-molecule systems.
 - Rebuilds polymer, removing solvent and PBC.
 
 ## Compile
