@@ -48,19 +48,20 @@ Number of points used as q in p(q) calculation
 
 
 
-##Speedup improvements:
+## Speedup improvements:
 
-+ before changes
-+ calculating only p(q)
++ before changes  
+calculating only p(q)  
 real    57m0.304s  
 user    357m27.428s  
 sys     0m11.928s  
 
 
-+ Collapsed do loop into arrays
-+ Improved OMP scheduling
-+ Expanded use of double_precision variables
-+ Also calculating p_ind(q)
++ After Changes  
+Collapsed do loop into arrays  
+Improved OMP scheduling  
+Expanded use of double_precision variables  
+Also calculating p_ind(q)  
 real    39m31.588s
 user    182m7.256s
 sys     0m4.876s
