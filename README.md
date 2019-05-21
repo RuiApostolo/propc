@@ -66,3 +66,9 @@ Also calculating p_ind(q)
 real    39m5.838s  
 user    181m18.248s  
 sys     0m4.320s  
+
++ After changes supramentioned  
+but calculating only p(q)  
+real    37m25.574s  
+user    162m23.588s  
+sys     0m6.400s  
