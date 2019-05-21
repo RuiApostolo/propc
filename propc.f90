@@ -498,7 +498,6 @@ subroutine formfactor(lower,upper,nmols,t_pq,i_pq)
   allocate(ind_qvalues(0:qpoints-1))
   allocate(ind_pvalues(0:qpoints-1))
   allocate(q(0:qpoints-1))
-  allocate(dummy_variable(0:qpoints-1))
   qdiff = 0.0_dp
   qvalues = 0.0_dp
   pvalues = 0.0_dp
