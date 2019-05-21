@@ -63,6 +63,6 @@ Collapsed do loop into arrays
 Improved OMP scheduling  
 Expanded use of double_precision variables  
 Also calculating p_ind(q)  
-real    39m31.588s
-user    182m7.256s
-sys     0m4.876s
+real    39m5.838s  
+user    181m18.248s  
+sys     0m4.320s  
