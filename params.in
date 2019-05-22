@@ -4,10 +4,10 @@
 t           Calculate Rg?
 t           Calculate Ree?
 t           Calculate P(q)?
-f           Calculate Individual P(q)?
+t           Calculate Individual P(q)?
 t           Write output trajectory?
 5           Number Columns
-100         StepMax
+10          StepMax
 0           IgnoreFirstSteps
 8           NMol
 737         MolSize

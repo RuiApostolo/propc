@@ -241,6 +241,7 @@ if (b_pq  .eqv. .true.) then
 end if
 if (b_ind_pq  .eqv. .true.) then
   open(unit=45, file='pq_ind.dat', action='write', status='new')
+  open(unit=46, file='pq_both.dat', action='write', status='new')
 end if
 if (b_trj .eqv. .true.) then
   open(unit=44, file=trim(adjustl(Outputprefix//"processed.lammpstrj")), action='write', status='new')
@@ -312,8 +313,10 @@ if (b_pq .eqv. .true.) then
 end if
 
 if (b_ind_pq .eqv. .true.) then
+write(46,*) "#q tot_pq ind_pq tot_div_ind_pq"
   do l=0,qpoints-1
     write(45,*) 10.0_dp**(lmin + real(l)/real(qpoints) * (lmax-lmin)), ind_pq(l)
+    write(46,*) 10.0_dp**(lmin + real(l)/real(qpoints) * (lmax-lmin)), total_pq(l), ind_pq(l), (total_pq(l)/ind_pq(l))
   end do
 end if
 
@@ -545,6 +548,7 @@ subroutine formfactor(lower,upper,nmols,t_pq,i_pq)
   end do
 
     qvalues = real(upper*nmols,dp)
+    ind_qvalues = real(upper,dp)
 
 if (present(i_pq)) then
   !$OMP PARALLEL DO            &
@@ -556,7 +560,6 @@ if (present(i_pq)) then
     ! write(6,*) m, q(m)
     ! if (debug .eqv. .true.) write(debugf,*) dummy_variable
     do n=1,nmols
-      ind_qvalues = real(upper*nmols,dp)
       do o=n,nmols
         if (n==o) then
           do j = lower,upper-1 
@@ -589,7 +592,7 @@ if (present(i_pq)) then
       end do
     end do
   !$OMP END PARALLEL DO
-  ind_pvalues = ind_qvalues / real(nmols*upper**2,dp)
+  ind_pvalues = ind_qvalues / real(nmols*(upper**2),dp)
   pvalues= qvalues / real(((upper*NMol)**2),dp)
   t_pq = t_pq + pvalues/real(StepMax-IgnoreFirst,dp)
   i_pq = i_pq + ind_pvalues/real(StepMax-IgnoreFirst,dp)
