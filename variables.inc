@@ -7,7 +7,7 @@ integer, parameter :: dp = selected_real_kind(15, 307)
 real(dp),dimension(:,:,:),allocatable::array
 real(dp),dimension(:,:),allocatable::hold
 real(dp),dimension(3,2)::Volume
-real(dp),dimension(:),allocatable::timestep,ind_pq,total_pq
+real(dp),dimension(:),allocatable::timestep,ind_pq,total_pq,diff_pq
 
 ! real
 real(dp) :: Lx, Ly, Lz, Hx, Hy, Hz, lmin, lmax

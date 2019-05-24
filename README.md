@@ -6,7 +6,7 @@ Tools:
 - Calculates Rg from average distance of all atoms.
 - Calculates Ree.
 - Calculates p(q) from the positions of atoms for one or more molecules.
-- Calculates individual p(q) from the positions of atoms for individual molecules in multi-molecule systems.
+- Calculates p(q) from the positions of atoms for smae-molecule and different-molecule in multi-molecule systems.
 - Rebuilds polymer, removing solvent and PBC.
 
 ## Compile
@@ -34,7 +34,7 @@ outputfile_prefix (must be string)
 bool_calc_rg?  
 bool_calc_ree?  
 bool_calc_pq?  
-bool_calc_individual_pq? (for systems with number of molecules > 1, requires regular pq)  
+bool_calc_same/diff_pq? (for systems with number of molecules > 1, requires regular pq)  
 bool_output_trj?  
 Number of columns in inputfile (lammpstrj)  
 Total number of timesteps  

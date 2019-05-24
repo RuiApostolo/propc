@@ -214,7 +214,9 @@ if (b_pq .eqv. .true.) then
 end if
 if (b_ind_pq .eqv. .true.) then
   allocate(ind_pq(0:qpoints-1))
+  allocate(diff_pq(0:qpoints-1))
   ind_pq = 0.0_dp
+  diff_pq = 0.0_dp
 end if
 if (debug .eqv. .true.) write(debugf,*) "allocated variables"
 ! open input file
@@ -241,7 +243,8 @@ if (b_pq  .eqv. .true.) then
 end if
 if (b_ind_pq  .eqv. .true.) then
   open(unit=45, file='pq_ind.dat', action='write', status='new')
-  open(unit=46, file='pq_both.dat', action='write', status='new')
+  open(unit=46, file='pq_all.dat', action='write', status='new')
+  open(unit=47, file='pq_diff.dat', action='write', status='new')
 end if
 if (b_trj .eqv. .true.) then
   open(unit=44, file=trim(adjustl(Outputprefix//"processed.lammpstrj")), action='write', status='new')
@@ -302,7 +305,7 @@ do Nstep=IgnoreFirst+1,stepmax
   if (b_rg  .eqv. .true.) call rg(1,molsize,NMol)
   if (b_ree .eqv. .true.) call ree(1,molsize,NMol)
   if ((b_pq  .eqv. .true.) .and. (b_ind_pq .eqv. .false.)) call formfactor(1,molsize,NMol,total_pq)
-  if ((b_pq  .eqv. .true.) .and. (b_ind_pq .eqv. .true.)) call formfactor(1,molsize,NMol,total_pq,ind_pq)
+  if ((b_pq  .eqv. .true.) .and. (b_ind_pq .eqv. .true.)) call formfactor(1,molsize,NMol,total_pq,ind_pq,diff_pq)
   if (b_trj .eqv. .true.) call outputtrj(1,molsize,NMol)
 end do
 
@@ -313,10 +316,11 @@ if (b_pq .eqv. .true.) then
 end if
 
 if (b_ind_pq .eqv. .true.) then
-write(46,*) "#q tot_pq ind_pq tot_div_ind_pq"
+write(46,*) "#q tot_pq ind_pq tot_div_ind_pq diff_pq"
   do l=0,qpoints-1
     write(45,*) 10.0_dp**(lmin + real(l)/real(qpoints) * (lmax-lmin)), ind_pq(l)
-    write(46,*) 10.0_dp**(lmin + real(l)/real(qpoints) * (lmax-lmin)), total_pq(l), ind_pq(l), (total_pq(l)/ind_pq(l))
+    write(46,*) 10.0_dp**(lmin + real(l)/real(qpoints) * (lmax-lmin)), total_pq(l), ind_pq(l), (total_pq(l)/ind_pq(l)), diff_pq(l)
+    write(47,*) 10.0_dp**(lmin + real(l)/real(qpoints) * (lmax-lmin)), diff_pq(l)
   end do
 end if
 
@@ -522,20 +526,25 @@ end subroutine ree
 ! appended by Joanna Faulds to account for the minimum image convention.!
 !***********************************************************************!
 
-subroutine formfactor(lower,upper,nmols,t_pq,i_pq)
+subroutine formfactor(lower,upper,nmols,t_pq,i_pq,d_pq)
   implicit none
   integer(sp),intent(in)::lower,upper,nmols
   real(dp),dimension(:),allocatable,intent(inout)::t_pq
-  real(dp),dimension(:),allocatable,intent(inout),optional::i_pq
+  real(dp),dimension(:),allocatable,intent(inout),optional::i_pq,d_pq
   real(dp):: xj, yj, zj, qdiff
-  real(dp),dimension(:),allocatable::qvalues,pvalues,q,ind_qvalues,ind_pvalues
+  real(dp),dimension(:),allocatable::qvalues,pvalues,q,ind_qvalues,ind_pvalues,diff_qvalues
   integer(sp):: j,k,m,n,o
   if (debug .eqv. .true.) write(debugf,*) "started formfactor"
   allocate(qvalues(0:qpoints-1))
   allocate(pvalues(0:qpoints-1))
   if (present(i_pq)) then
-    allocate(ind_qvalues(0:qpoints-1))
-    allocate(ind_pvalues(0:qpoints-1))
+    if (present(d_pq)) then
+      allocate(ind_qvalues(0:qpoints-1))
+      allocate(ind_pvalues(0:qpoints-1))
+      allocate(diff_qvalues(0:qpoints-1))
+    else
+      call systemexit("missing d_pq")
+    end if
   end if
   allocate(q(0:qpoints-1))
   qdiff = 0.0_dp
@@ -547,16 +556,17 @@ subroutine formfactor(lower,upper,nmols,t_pq,i_pq)
     q(m) = 10.0_dp**(lmin + real(m,dp)/real(qpoints,dp) * (lmax-lmin))
   end do
 
-    qvalues = real(upper*nmols,dp)
-    ind_qvalues = real(upper,dp)
+  qvalues = real(upper*nmols,dp)
+  ind_qvalues = real(upper,dp)
+  diff_qvalues = 0.0_dp
 
-if (present(i_pq)) then
+if (present(i_pq) .and. present(d_pq)) then
   !$OMP PARALLEL DO            &
   !$OMP SCHEDULE(AUTO)      &
   !$OMP DEFAULT(none)        &
   !$OMP SHARED(array,q, Lx, Ly, Lz, nmols, lower, upper) &
   !$OMP PRIVATE(j, k, xj, yj, zj, qdiff,o,n) &
-  !$OMP REDUCTION(+:qvalues,ind_qvalues)
+  !$OMP REDUCTION(+:qvalues,ind_qvalues,diff_qvalues)
     ! write(6,*) m, q(m)
     ! if (debug .eqv. .true.) write(debugf,*) dummy_variable
     do n=1,nmols
@@ -586,6 +596,7 @@ if (present(i_pq)) then
                 zj= zj - real(Lz*anint(zj/Lz),dp)
                 qdiff = 1.0_dp*dsqrt(xj**2.0_dp + yj**2.0_dp + zj**2.0_dp)
                 qvalues  = qvalues + 2.0_dp * sin(q*qdiff)/(q*qdiff)
+                diff_qvalues = diff_qvalues + 2.0_dp * sin(q*qdiff)/(q*qdiff)
             end do
           end do
         end if
@@ -593,9 +604,11 @@ if (present(i_pq)) then
     end do
   !$OMP END PARALLEL DO
   ind_pvalues = ind_qvalues / real(nmols*(upper**2),dp)
+  ! diff_pvalues = diff_qvalues / real(nmols*(upper**2),dp)
   pvalues= qvalues / real(((upper*NMol)**2),dp)
   t_pq = t_pq + pvalues/real(StepMax-IgnoreFirst,dp)
   i_pq = i_pq + ind_pvalues/real(StepMax-IgnoreFirst,dp)
+  d_pq = d_pq + diff_qvalues/real(StepMax-IgnoreFirst,dp)
 else
   !$OMP PARALLEL DO            &
   !$OMP SCHEDULE(AUTO)      &
