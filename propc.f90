@@ -556,9 +556,9 @@ subroutine formfactor(lower,upper,nmols,t_pq,i_pq,d_pq)
     q(m) = 10.0_dp**(lmin + real(m,dp)/real(qpoints,dp) * (lmax-lmin))
   end do
 
-  qvalues = real(upper*nmols,dp)
-  ind_qvalues = real(upper,dp)
-  diff_qvalues = 0.0_dp
+  if (b_pq .eqv. .true.)     qvalues = real(upper*nmols,dp)
+  if (b_ind_pq .eqv. .true.) ind_qvalues = real(upper,dp)
+  if (b_ind_pq .eqv. .true.) diff_qvalues = 0.0_dp
 
 if (present(i_pq) .and. present(d_pq)) then
   !$OMP PARALLEL DO            &
