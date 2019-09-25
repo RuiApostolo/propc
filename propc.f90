@@ -398,11 +398,11 @@ subroutine readdata(mstart,nmols,msize,atoms,col)
   if (debug .eqv. .true.) write(debugf,*) "started readdata"
   if (debug .eqv. .true.) write(debugf,*) (atoms-nmols*(msize-1))
   n=1
-  k=1
   readloop: do i=1,(atoms-nmols*(msize-1))
     read(inputf,*) (dummy(j),j=1,col)
     if (debug .eqv. .true.) write(debugf,*) i, dummy
     if (int(dummy(2)) == mstart) then
+      k=1
       if (debug .eqv. .true.) write(debugf,*) "went to readdata molecule loop"
       array(1:col,k,n) = dummy(1:col)
       ! if (debug .eqv. .true.) write(debugf,*) (array(n,k,j),j=1,col)
