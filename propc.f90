@@ -194,6 +194,7 @@ write(6,*)      "Number of Rows in input file:           ",trim(i2str(Columns))
 write(6,*)      "Last step number:                       ",trim(i2str(StepMax))
 write(6,*)      "Ignoring first:                         ",trim(i2str(IgnoreFirst))," timesteps"
 write(6,*)      "Molecule Size:                          ",trim(i2str(MolSize))
+write(6,*)      "Number of molecules                     ",trim(i2str(NMol))
 write(6,*)      "Type number for first atom in Molecule: ",trim(i2str(MolStart))
 write(6,*)      "Status will be echoed on console every: ",trim(i2str(StepOutput))," timesteps"
 write(6,*)      "Form factor lower exponent:             ",trim(r2str(lmin))
