@@ -18,7 +18,7 @@ integer(sp)::Columns,StepMax,IgnoreFirst,Molsize,MolStart,StepOutput
 
 ! logicals
 ! logical :: qtrig=.true.
-logical :: debug,b_rg,b_ree,b_pq,b_trj,b_ind_pq
+logical :: debug,b_rg,b_rg_ave,b_ree,b_pq,b_trj,b_ind_pq
 
 ! strings
 character(LEN=80),dimension(4)::headertext

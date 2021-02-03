@@ -35,6 +35,9 @@ read(5,'(a)',iostat=ierror)  Outputprefix
 read(5,'(L6)',iostat=ierror)      b_rg
   if (debug .eqv. .true.) write(debugf,*) "b_rg", b_rg
   if (ierror /= 0) call systemexit("Calculate Rg")
+read(5,'(L6)',iostat=ierror)      b_rg_ave
+  if (debug .eqv. .true.) write(debugf,*) "b_rg_ave", b_rg_ave
+  if (ierror /= 0) call systemexit("Average Rg? (t= one averaged Rg, f= Rg of the entire group of molecules, e.g., micelle)")
 read(5,'(L6)',iostat=ierror)      b_ree
   if (debug .eqv. .true.) write(debugf,*) "b_ree", b_ree
   if (ierror /= 0) call systemexit("Calculate Ree")
@@ -96,6 +99,13 @@ if (Inputfile == "") then
   write(6,*) "No name for input file given."
   ! see /usr/include/sysexits.h for error codes
   call EXIT(65)
+end if
+if ((b_rg_ave .eqv. .true.) .and. (b_rg .eqv. .false.)) then
+  write(6,*) "Averaging the Rg of all molecules needs Rg to be calculated for each molecule. Changed b_rg to true."
+  ! read(5,*)  answer
+  ! call userexit(answer)
+  b_rg = .true.
+  ! write(6,*) "bool_calc_pq set to true"
 end if
 if ((b_ind_pq .eqv. .true.) .and. (b_pq .eqv. .false.)) then
   write(6,*) "Individual P(q) requires normal P(q) calculation. Changed b_pq to true."
@@ -186,6 +196,7 @@ write(6,*)
 write(6,*)      "Input file chosen:                      ",Inputfile
 write(6,*)
 call decwrite(b_rg,"Rg")
+call decwrite(b_rg_ave,"averaged Rg for each molecule")
 call decwrite(b_ree,"Ree")
 call decwrite(b_pq,"p(q)")
 call decwrite(b_ind_pq,"individual p(q)")
@@ -303,7 +314,7 @@ do Nstep=IgnoreFirst+1,stepmax
     end do
   end if
   call molrebuild
-  if (b_rg  .eqv. .true.) call rg(1,molsize,NMol)
+  if (b_rg  .eqv. .true.) call rg(1,molsize,NMol,b_rg_ave)
   if (b_ree .eqv. .true.) call ree(1,molsize,NMol)
   if ((b_pq  .eqv. .true.) .and. (b_ind_pq .eqv. .false.)) call formfactor(1,molsize,NMol,total_pq)
   if ((b_pq  .eqv. .true.) .and. (b_ind_pq .eqv. .true.)) call formfactor(1,molsize,NMol,total_pq,ind_pq,diff_pq)
@@ -475,26 +486,33 @@ end subroutine molrebuild
 ! formula from Soft Matter, 2009, 5, 637–645
 !********************************************
 
-subroutine rg(lower,upper,nmols)
+subroutine rg(lower,upper,nmols,b_ave)
   implicit none
   integer(sp),intent(in)::lower,upper,nmols
   real(dp):: xi, yi, zi, rdiff, rtot
   integer(sp):: j,k,n
+  logical:: b_ave
   if (debug .eqv. .true.) write(debugf,*) "started rg"
   write(41,"(I0,A)",advance="no") Nstep, ' '
+  rdiff = 0.0_dp
   do n=1,nmols
-    rdiff = 0.0_dp
-      do j=lower,upper-1
-        do k=j+1,upper
-          xi = array(3,j,n) - array(3,k,n)
-          yi = array(4,j,n) - array(4,k,n)
-          zi = array(5,j,n) - array(5,k,n)
-          rdiff = rdiff + xi**2.0_dp + yi**2.0_dp + zi**2.0_dp
-        end do
+    do j=lower,upper-1
+      do k=j+1,upper
+        xi = array(3,j,n) - array(3,k,n)
+        yi = array(4,j,n) - array(4,k,n)
+        zi = array(5,j,n) - array(5,k,n)
+        rdiff = rdiff + xi**2.0_dp + yi**2.0_dp + zi**2.0_dp
       end do
-    rtot = 1.0_dp*sqrt(rdiff/(molsize**2.0_dp))
-    write(41,"(f0.6,a)",advance="no") rtot, ' '
+    end do
+    rtot = rtot + 1.0_dp*sqrt(rdiff/(molsize**2.0_dp))
+    if (b_ave .eqv. .true.) then
+      write(41,"(f0.6,a)",advance="no") rtot, ' '
+      rdiff = 0.0_dp
+    end if
   end do
+  if (b_ave .eqv. .false.) then
+    write(41,"(f0.6,a)",advance="no") rtot, ' '
+  end if
   write(41,"(A)") ' '
 end subroutine rg
 

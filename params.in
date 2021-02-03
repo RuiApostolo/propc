@@ -1,17 +1,18 @@
 # Be careful of ammount of spaces (min col 12)
-../dump.npt.lammpstrj
+nptpro.lammpstrj
 
 t           Calculate Rg?
-t           Calculate Ree?
-f           Calculate P(q)?
+f           Average Rg of all molecules? (f for micelle)
+f           Calculate Ree?
+t           Calculate P(q)?
 f           Calculate Individual P(q)?
-t           Write output trajectory?
-5           Number Columns
-15001       StepMax
-5001        IgnoreFirstSteps
-1           NMol
-737         MolSize
-10          MolStartType
+f           Write output trajectory?
+8           Number Columns
+1001        StepMax
+0           IgnoreFirstSteps
+20          NMol
+65          MolSize
+3           MolStartType
 50          StepOutput
 -3.0        p(q)_exp_low
 1.0         p(q)_exp_high
