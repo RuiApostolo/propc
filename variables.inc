@@ -27,5 +27,6 @@ character::Inputfile*128,Outputprefix*64,userinput*1
 ! New clock variables
 ! going to ignore the array, it gives user and system time in seconds, in this order.
 real, dimension(2) :: tarray 
-real(sp) ::  beg_cpu_time, end_cpu_time, cpu_time_now, cpu_time_last
-character(LEN=20)::tempw, tsl, tss, eta, fname, answer
+integer(kind=8)::beg_time, last_time, ready_time
+integer(kind=8)::time_since_last, time_since_ready
+character(LEN=32)::tempw, tsl, tss, eta, fname, answer

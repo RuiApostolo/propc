@@ -9,6 +9,7 @@ program propc
 ! version 2.1 -- 2021/02/03
 ! changelog from 2.0:
 ! added boolean trigger for averaging RG (for dimers) or not (for micelles)
+! fixed timing modules
 use omp_lib
 use, intrinsic :: iso_fortran_env
 implicit none
@@ -20,12 +21,8 @@ if (debug .eqv. .true.) then
   write(6,*) "DEBUG MODE ON - CHECK DEBUG.LOG"
 end if
 
-
-! New clock start
-! going to ignore the array, it gives user and system time in seconds, in this order.
-call ETIME(tarray, beg_cpu_time)
-cpu_time_last = 0.0_dp
-
+! Clock start
+call tick(beg_time)
 
 ! read from stin so that more than one file can be used
 read(5,*)
@@ -40,7 +37,8 @@ read(5,'(L6)',iostat=ierror)      b_rg
   if (ierror /= 0) call systemexit("Calculate Rg")
 read(5,'(L6)',iostat=ierror)      b_rg_ind
   if (debug .eqv. .true.) write(debugf,*) "b_rg_ind", b_rg_ind
-  if (ierror /= 0) call systemexit("One Rg value per molecule? (t= 1 Rg per molecule, f= Rg of all atoms, e.g., micelle)") read(5,'(L6)',iostat=ierror)      b_ree
+  if (ierror /= 0) call systemexit("One Rg value per molecule? (t= 1 Rg per molecule, f= Rg of all atoms, e.g., micelle)")
+read(5,'(L6)',iostat=ierror)      b_ree
   if (debug .eqv. .true.) write(debugf,*) "b_ree", b_ree
   if (ierror /= 0) call systemexit("Calculate Ree")
 read(5,'(L6)',iostat=ierror)      b_pq
@@ -284,31 +282,24 @@ do Nstep=1,IgnoreFirst
   if (modulo(Nstep,100) == 0) write(6,*) Nstep
   call skipdata
 end do
-call ETIME(tarray,cpu_time_now)
-call texttime(int(cpu_time_now-cpu_time_last),tsl)
+! call ETIME(tarray,time_now)
+call sleep(1)
+! write(6,*) tock(beg_time)
+call texttime(tock(beg_time),tsl)
+call tick(ready_time)
+call tick(last_time)
 write(6, *) "Ignored   ",IgnoreFirst,"  timesteps, took ",tsl
 write(6,*)
 write(6,*)
-cpu_time_last = cpu_time_now
-write(6,*) "Now calculating timestep number:"
-write(6,*)
-write(6,*) Nstep
-
+write(6,*) "Timestep:    ", &
+           "This iteration:                 ", &
+           "Running for:                    ", &
+           "ETA:"
 
 
 do Nstep=IgnoreFirst+1,stepmax
   if (debug .eqv. .true.) write(debugf,*) "main loop"
   if (modulo(Nstep,StepOutput) == 0) call timer(Nstep)
-    ! call ETIME(tarray,cpu_time_now) ! new clock
-    ! call texttime(int(cpu_time_now-cpu_time_last),tsl)
-    ! call texttime(int(cpu_time_now-beg_cpu_time),tss)
-    ! call texttime(int((cpu_time_now-cpu_time_last)*(((stepmax-Nstep)/100)+1)),eta)
-    ! write(6,*) "Timestep: ", Nstep, &
-    !            "  This iteration: ", tsl, &
-    !            "Running for: ", tss, &
-    !            "ETA: ", eta
-    ! cpu_time_last = cpu_time_now
-  ! end if
   call readheader
   call readdata(MolStart,NMol,MolSize,Natom,Columns)
   if (Nstep==IgnoreFirst+1) then
@@ -817,9 +808,9 @@ end function r2str
 
 subroutine texttime(seconds,ttime)
   implicit none
-  integer(kind=4)::seconds
+  integer(kind=8)::seconds
   integer::s,m,h,r
-  character(LEN=20)::ttime,ttemp
+  character(LEN=32)::ttime,ttemp
   ttime = ""
   ttemp = ""
   s = 0
@@ -833,29 +824,48 @@ subroutine texttime(seconds,ttime)
   h = (r - m)/60
   if (h == 0) then
     if (m == 0) then
-      write(ttemp, '(I2.2, A)') s, " seconds"
+      write(ttemp, '(I2.2, A)') s, " seconds "
     else
-      write(ttemp, '(I2.2, A, I2.2, A)') m, " min ", s, " sec"
+      write(ttemp, '(I2.2, A, I2.2, A)') m, " min ", s, " sec "
     end if
   else
-    write(ttemp, '(I4.1, A, I2.2, A, I2.2, A)') h, " h ", m, " min ", s, " sec"
+    write(ttemp, '(I4.1, A, I2.2, A, I2.2, A)') h, " h ", m, " min ", s, " sec "
   end if
   write(ttime, '(A)') trim(ADJUSTL(ttemp))
 end subroutine texttime
 
+
+!**********************************************************************************!
+! Wall clock timing subroutine                                                     !
+! from: stackoverflow.com/questions/5083051/timing-a-fortran-multithreaded-program !
+! implemented by Rui Apóstolo in 2021                                              !
+! *********************************************************************************!
+
+subroutine tick(t)
+    integer(kind=8),intent(OUT)::t
+
+    call system_clock(t)
+end subroutine tick
+
+! returns time in seconds from now to time described by t
+function tock(t) result(r)
+    integer(kind=8),intent(in)::t
+    integer(kind=8)::now,clock_rate,r
+
+    call system_clock(now,clock_rate)
+    r =real(now - t)/real(clock_rate)
+end function tock
+
 subroutine timer(steps)
   ! requires subroutine texttime
   integer(sp),intent(in)::steps
-  ! call cpu_time(cpu_time_now) ! old clock
-  call ETIME(tarray,cpu_time_now) ! new clock
-  call texttime(int(cpu_time_now-cpu_time_last),tsl)
-  call texttime(int(cpu_time_now-beg_cpu_time),tss)
-  call texttime(int((cpu_time_now-cpu_time_last)*(((stepmax-steps)/100)+1)),eta)
-  write(6,*) "Timestep: ", steps, &
-             "  This iteration: ", tsl, &
-             "Running for: ", tss, &
-             "ETA: ", eta
-  cpu_time_last = cpu_time_now
+  time_since_last = tock(last_time)
+  time_since_ready = tock(ready_time)
+  call texttime(time_since_last,tsl)
+  call texttime(time_since_ready,tss)
+  call texttime(int(((stepmax/steps)*(time_since_ready))-time_since_ready,kind=8),eta)
+  write(6,*) steps, " ", tsl, tss, eta
+  call tick(last_time)
 end subroutine timer
 
 !********************************************

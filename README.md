@@ -52,3 +52,4 @@ Number of points used as q in p(q) calculation
 * Version 2.1:
   * Added 'Indivudual Rg' calculation switch: if true calculates Rg for each molecule, if false consideres every molecule part of the same 'cluste' and calculates the Rg for said cluster (new 'Total Rg' subroutine).
   * Added OMP support for the new 'Total Rg' subroutine.
+  * Fixed timing modules
