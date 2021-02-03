@@ -1,3 +1,7 @@
+*.eps
+*.log
+*.plot
+*.dat
 *~
 *.lammpstrj
 propc

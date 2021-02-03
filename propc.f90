@@ -1,11 +1,14 @@
 ! Code for calculating the formfactor of two polymer molecules
 program propc
-! From the group of Prof Philip Camp
-! subroutines by Julien Sindt, Rui Apóstolo in 2016
-! the file was modified and adapted by Joanna Faulds in 2019
+! From the group of Prof. Philip Camp
+! original subroutines by Julien Sindt, Rui Apóstolo in 2016
+! minimum image convention implemented by Joanna Faulds in 2019
 ! double precision added by Rui Apóstolo in 2019
+! average vs total Rg added by Rui Apóstolo in 2021
 ! University of Edinburgh
-! version 2.0
+! version 2.1 -- 2021/02/03
+! changelog from 2.0:
+! added boolean trigger for averaging RG (for dimers) or not (for micelles)
 use omp_lib
 use, intrinsic :: iso_fortran_env
 implicit none
@@ -35,9 +38,9 @@ read(5,'(a)',iostat=ierror)  Outputprefix
 read(5,'(L6)',iostat=ierror)      b_rg
   if (debug .eqv. .true.) write(debugf,*) "b_rg", b_rg
   if (ierror /= 0) call systemexit("Calculate Rg")
-read(5,'(L6)',iostat=ierror)      b_rg_ave
-  if (debug .eqv. .true.) write(debugf,*) "b_rg_ave", b_rg_ave
-  if (ierror /= 0) call systemexit("Average Rg? (t= one averaged Rg, f= Rg of the entire group of molecules, e.g., micelle)")
+read(5,'(L6)',iostat=ierror)      b_rg_ind
+  if (debug .eqv. .true.) write(debugf,*) "b_rg_ind", b_rg_ind
+  if (ierror /= 0) call systemexit("One Rg value per molecule? (t= one Rg per molecule, f= Rg of the entire group of atoms, e.g., micelle)")
 read(5,'(L6)',iostat=ierror)      b_ree
   if (debug .eqv. .true.) write(debugf,*) "b_ree", b_ree
   if (ierror /= 0) call systemexit("Calculate Ree")
@@ -100,8 +103,8 @@ if (Inputfile == "") then
   ! see /usr/include/sysexits.h for error codes
   call EXIT(65)
 end if
-if ((b_rg_ave .eqv. .true.) .and. (b_rg .eqv. .false.)) then
-  write(6,*) "Averaging the Rg of all molecules needs Rg to be calculated for each molecule. Changed b_rg to true."
+if ((b_rg_ind .eqv. .true.) .and. (b_rg .eqv. .false.)) then
+  write(6,*) "Calculating the Rg for each molecule needs the Rg to be calculated at all. Changed b_rg to true."
   ! read(5,*)  answer
   ! call userexit(answer)
   b_rg = .true.
@@ -196,7 +199,11 @@ write(6,*)
 write(6,*)      "Input file chosen:                      ",Inputfile
 write(6,*)
 call decwrite(b_rg,"Rg")
-call decwrite(b_rg_ave,"averaged Rg for each molecule")
+if (b_rg_ind .eqv. true) then
+  call decwrite(b_rg_ind,"calculating Rg for each molecule")
+else
+  call decwrite(.t., "calculating Rg for all atoms as one unit")
+end if
 call decwrite(b_ree,"Ree")
 call decwrite(b_pq,"p(q)")
 call decwrite(b_ind_pq,"individual p(q)")
@@ -235,12 +242,17 @@ if (debug .eqv. .true.) write(debugf,*) "allocated variables"
 open(inputf,file=Inputfile,action='read',status='old')
 ! open output files
 if (b_rg  .eqv. .true.) then
-  open(unit=41, file='rg.dat', action='write', status='new')
-  write(41,"(A)",advance='no') 'Nstep'
-  do l=1,NMol-1
-    write(41,"(A,I0)",advance='no') ' rg', l
-  end do
-  write(41,"(A,I0)") ' rg', NMol
+  if (b_rg_ind .eqv. .true.) then
+    open(unit=41, file='rg_per_molecule.dat', action='write', status='new')
+    write(41,"(A)",advance='no') 'Nstep'
+    do l=1,NMol-1
+      write(41,"(A,I0)",advance='no') ' rg', l
+    end do
+    write(41,"(A,I0)") ' rg', NMol
+  else
+    open(unit=41, file='rg.dat', action='write', status='new')
+    write(41,"(A)") 'Nstep rg_total'
+  end if
 end if
 if (b_ree .eqv. .true.) then
   open(unit=42, file='ree.dat', action='write', status='new')
@@ -314,7 +326,8 @@ do Nstep=IgnoreFirst+1,stepmax
     end do
   end if
   call molrebuild
-  if (b_rg  .eqv. .true.) call rg(1,molsize,NMol,b_rg_ave)
+  if ((b_rg  .eqv. .true.) and (bg_rg_ave .eqv. .true.)) call rg_ave(1,molsize,NMol)
+  if ((b_rg  .eqv. .true.) and (bg_rg_ave .eqv. .false.)) call rg(1,molsize,NMol)
   if (b_ree .eqv. .true.) call ree(1,molsize,NMol)
   if ((b_pq  .eqv. .true.) .and. (b_ind_pq .eqv. .false.)) call formfactor(1,molsize,NMol,total_pq)
   if ((b_pq  .eqv. .true.) .and. (b_ind_pq .eqv. .true.)) call formfactor(1,molsize,NMol,total_pq,ind_pq,diff_pq)
@@ -328,7 +341,7 @@ if (b_pq .eqv. .true.) then
 end if
 
 if (b_ind_pq .eqv. .true.) then
-write(46,*) "#q tot_pq ind_pq tot_div_ind_pq diff_pq"
+  write(46,*) "#q tot_pq ind_pq tot_div_ind_pq diff_pq"
   do l=0,qpoints-1
     write(45,*) 10.0_dp**(lmin + real(l)/real(qpoints) * (lmax-lmin)), ind_pq(l)
     write(46,*) 10.0_dp**(lmin + real(l)/real(qpoints) * (lmax-lmin)), total_pq(l), ind_pq(l), (total_pq(l)/ind_pq(l)), diff_pq(l)
@@ -448,21 +461,21 @@ subroutine molrebuild
   ! to avoid clipping of first atom
     if (array(3,1,n) >= hold(n,1)+Hx) then
       array(3,1,n) = array(3,1,n) - Lx
-      else if (array(3,1,n) <= hold(n,1)-Hx) then
+    else if (array(3,1,n) <= hold(n,1)-Hx) then
       array(3,1,n) = array(3,1,n) + Lx
     end if
     hold(n,1) = array(3,1,n)
     
     if (array(4,1,n) >= hold(n,2)+Hy) then
       array(4,1,n) = array(4,1,n) - Ly
-      else if (array(4,1,n) <= hold(n,2)-Hy) then
+    else if (array(4,1,n) <= hold(n,2)-Hy) then
       array(4,1,n) = array(4,1,n) + Ly
     end if
     hold(n,2) = array(4,1,n)
     
     if (array(5,1,n) >= hold(n,3)+Hz) then
       array(5,1,n) = array(5,1,n) - Lz
-      else if (array(5,1,n) <= hold(n,3)-Hz) then
+    else if (array(5,1,n) <= hold(n,3)-Hz) then
       array(5,1,n) = array(5,1,n) + Lz
     end if
     hold(n,3) = array(5,1,n)
@@ -481,21 +494,22 @@ subroutine molrebuild
   end do
 end subroutine molrebuild
 
-!********************************************
-! Rg calculation - Written by Rui Apóstolo
-! formula from Soft Matter, 2009, 5, 637–645
-!********************************************
 
-subroutine rg(lower,upper,nmols,b_ave)
+!*************************************************************!
+! Average Rg calculation - averages Rg from several molecules !
+! Written by Rui Apóstolo 2016                                !
+! formula (13) from Soft Matter, 2009, 5, 637–645             !
+!*************************************************************!
+
+subroutine rg_ave(lower,upper,nmols)
   implicit none
   integer(sp),intent(in)::lower,upper,nmols
   real(dp):: xi, yi, zi, rdiff, rtot
   integer(sp):: j,k,n
-  logical:: b_ave
   if (debug .eqv. .true.) write(debugf,*) "started rg"
   write(41,"(I0,A)",advance="no") Nstep, ' '
-  rdiff = 0.0_dp
   do n=1,nmols
+    rdiff = 0.0_dp
     do j=lower,upper-1
       do k=j+1,upper
         xi = array(3,j,n) - array(3,k,n)
@@ -504,16 +518,65 @@ subroutine rg(lower,upper,nmols,b_ave)
         rdiff = rdiff + xi**2.0_dp + yi**2.0_dp + zi**2.0_dp
       end do
     end do
-    rtot = rtot + 1.0_dp*sqrt(rdiff/(molsize**2.0_dp))
-    if (b_ave .eqv. .true.) then
-      write(41,"(f0.6,a)",advance="no") rtot, ' '
-      rdiff = 0.0_dp
-    end if
-  end do
-  if (b_ave .eqv. .false.) then
+    rtot = 1.0_dp*sqrt(rdiff/(molsize**2.0_dp))
     write(41,"(f0.6,a)",advance="no") rtot, ' '
-  end if
+  end do
   write(41,"(A)") ' '
+end subroutine rg
+
+
+!***************************************************************!
+! Rg calculation - calculates one Rg for the clump of molecules !
+! Adapted from the rg_ave subroutine by Rui Apóstolo in 2021    !
+! formula (13) from Soft Matter, 2009, 5, 637–645               !
+!***************************************************************!
+
+subroutine rg(lower,upper,nmols)
+  implicit none
+  integer(sp),intent(in)::lower,upper,nmols
+  real(dp):: xi, yi, zi, rdiff, rtot
+  integer(sp):: j,k,n,m
+  if (debug .eqv. .true.) write(debugf,*) "started rg"
+  write(41,"(I0,A)",advance="no") Nstep, ' '
+  rdiff = 0.0_dp
+  !$OMP PARALLEL DO            &
+  !$OMP SCHEDULE(AUTO)      &
+  !$OMP DEFAULT(none)        &
+  !$OMP SHARED(array, nmols, lower, upper, Lx, Ly, Lz) &
+  !$OMP PRIVATE(j, k, xi, yi, zi, n, m) &
+  !$OMP REDUCTION(+:rdiff)
+  omol: do n=1,nmols
+    imol: do m=n,nmols
+      if (n == m) then
+        oatom: do j=lower,upper-1
+          iatom: do k=j+1,upper
+            xi = array(3,j,m) - array(3,k,n)
+            xi = xi - real(Lx*anint(xi/Lx),dp)
+            yi = array(4,j,m) - array(4,k,n)
+            yi = yi - real(Lx*anint(yi/Lx),dp)
+            zi = array(5,j,m) - array(5,k,n)
+            zi = zi - real(Lx*anint(zi/Lx),dp)
+            rdiff = rdiff + xi**2.0_dp + yi**2.0_dp + zi**2.0_dp
+          end do iatom
+        end do oatom
+      else
+        oatom: do j=lower,upper
+          iatom: do k=lower,upper
+            xi = array(3,j,m) - array(3,k,n)
+            xi = xi - real(Lx*anint(xi/Lx),dp)
+            yi = array(4,j,m) - array(4,k,n)
+            yi = yi - real(Lx*anint(yi/Lx),dp)
+            zi = array(5,j,m) - array(5,k,n)
+            zi = zi - real(Lx*anint(zi/Lx),dp)
+            rdiff = rdiff + xi**2.0_dp + yi**2.0_dp + zi**2.0_dp
+          end do iatom
+        end do oatom
+      end if 
+    end do imol
+  end do omol
+  !$OMP END PARALLEL DO
+  rtot = 1.0_dp*sqrt(rdiff/((Nmol*molsize)**2.0_dp))
+  write(41,"(f0.6,a)") rtot
 end subroutine rg
 
 !*************************************!

@@ -2,7 +2,7 @@
 nptpro.lammpstrj
 
 t           Calculate Rg?
-f           Average Rg of all molecules? (f for micelle)
+f           Calc. Rg of individual molecules? (f=Rg of all atoms together)
 f           Calculate Ree?
 t           Calculate P(q)?
 f           Calculate Individual P(q)?
