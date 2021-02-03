@@ -40,8 +40,7 @@ read(5,'(L6)',iostat=ierror)      b_rg
   if (ierror /= 0) call systemexit("Calculate Rg")
 read(5,'(L6)',iostat=ierror)      b_rg_ind
   if (debug .eqv. .true.) write(debugf,*) "b_rg_ind", b_rg_ind
-  if (ierror /= 0) call systemexit("One Rg value per molecule? (t= one Rg per molecule, f= Rg of the entire group of atoms, e.g., micelle)")
-read(5,'(L6)',iostat=ierror)      b_ree
+  if (ierror /= 0) call systemexit("One Rg value per molecule? (t= 1 Rg per molecule, f= Rg of all atoms, e.g., micelle)") read(5,'(L6)',iostat=ierror)      b_ree
   if (debug .eqv. .true.) write(debugf,*) "b_ree", b_ree
   if (ierror /= 0) call systemexit("Calculate Ree")
 read(5,'(L6)',iostat=ierror)      b_pq
@@ -199,10 +198,10 @@ write(6,*)
 write(6,*)      "Input file chosen:                      ",Inputfile
 write(6,*)
 call decwrite(b_rg,"Rg")
-if (b_rg_ind .eqv. true) then
-  call decwrite(b_rg_ind,"calculating Rg for each molecule")
+if (b_rg_ind .eqv. .true.) then
+  call decwrite(b_rg_ind,"Rg for each molecule")
 else
-  call decwrite(.t., "calculating Rg for all atoms as one unit")
+  call decwrite(.true., "Rg for all atoms as one unit")
 end if
 call decwrite(b_ree,"Ree")
 call decwrite(b_pq,"p(q)")
@@ -274,12 +273,7 @@ if (b_trj .eqv. .true.) then
   open(unit=44, file=trim(adjustl(Outputprefix//"processed.lammpstrj")), action='write', status='new')
 end if
 
-
 if (debug .eqv. .true.) write(debugf,*) "opened files"
-
-
-
-
 
 write(6,*)      "Ignoring first:                         ",trim(i2str(IgnoreFirst))," timesteps"
 write(6,*)
@@ -326,11 +320,11 @@ do Nstep=IgnoreFirst+1,stepmax
     end do
   end if
   call molrebuild
-  if ((b_rg  .eqv. .true.) and (bg_rg_ave .eqv. .true.)) call rg_ave(1,molsize,NMol)
-  if ((b_rg  .eqv. .true.) and (bg_rg_ave .eqv. .false.)) call rg(1,molsize,NMol)
+  if ((b_rg .eqv. .true.) .and. (b_rg_ind .eqv. .true.)) call rg_ind(1,molsize,NMol)
+  if ((b_rg .eqv. .true.) .and. (b_rg_ind .eqv. .false.)) call rg_tot(1,molsize,NMol)
   if (b_ree .eqv. .true.) call ree(1,molsize,NMol)
-  if ((b_pq  .eqv. .true.) .and. (b_ind_pq .eqv. .false.)) call formfactor(1,molsize,NMol,total_pq)
-  if ((b_pq  .eqv. .true.) .and. (b_ind_pq .eqv. .true.)) call formfactor(1,molsize,NMol,total_pq,ind_pq,diff_pq)
+  if ((b_pq .eqv. .true.) .and. (b_ind_pq .eqv. .false.)) call formfactor(1,molsize,NMol,total_pq)
+  if ((b_pq .eqv. .true.) .and. (b_ind_pq .eqv. .true.)) call formfactor(1,molsize,NMol,total_pq,ind_pq,diff_pq)
   if (b_trj .eqv. .true.) call outputtrj(1,molsize,NMol)
 end do
 
@@ -501,7 +495,7 @@ end subroutine molrebuild
 ! formula (13) from Soft Matter, 2009, 5, 637–645             !
 !*************************************************************!
 
-subroutine rg_ave(lower,upper,nmols)
+subroutine rg_ind(lower,upper,nmols)
   implicit none
   integer(sp),intent(in)::lower,upper,nmols
   real(dp):: xi, yi, zi, rdiff, rtot
@@ -522,16 +516,16 @@ subroutine rg_ave(lower,upper,nmols)
     write(41,"(f0.6,a)",advance="no") rtot, ' '
   end do
   write(41,"(A)") ' '
-end subroutine rg
+end subroutine rg_ind
 
 
-!***************************************************************!
-! Rg calculation - calculates one Rg for the clump of molecules !
-! Adapted from the rg_ave subroutine by Rui Apóstolo in 2021    !
-! formula (13) from Soft Matter, 2009, 5, 637–645               !
-!***************************************************************!
+!*********************************************************************!
+! Total Rg calculation - calculates one Rg for the clump of molecules !
+! Adapted from the rg_ind subroutine by Rui Apóstolo in 2021          !
+! formula (13) from Soft Matter, 2009, 5, 637–645                     !
+!*********************************************************************!
 
-subroutine rg(lower,upper,nmols)
+subroutine rg_tot(lower,upper,nmols)
   implicit none
   integer(sp),intent(in)::lower,upper,nmols
   real(dp):: xi, yi, zi, rdiff, rtot
@@ -548,8 +542,8 @@ subroutine rg(lower,upper,nmols)
   omol: do n=1,nmols
     imol: do m=n,nmols
       if (n == m) then
-        oatom: do j=lower,upper-1
-          iatom: do k=j+1,upper
+        oatom1: do j=lower,upper-1
+          iatom1: do k=j+1,upper
             xi = array(3,j,m) - array(3,k,n)
             xi = xi - real(Lx*anint(xi/Lx),dp)
             yi = array(4,j,m) - array(4,k,n)
@@ -557,11 +551,11 @@ subroutine rg(lower,upper,nmols)
             zi = array(5,j,m) - array(5,k,n)
             zi = zi - real(Lx*anint(zi/Lx),dp)
             rdiff = rdiff + xi**2.0_dp + yi**2.0_dp + zi**2.0_dp
-          end do iatom
-        end do oatom
+          end do iatom1
+        end do oatom1
       else
-        oatom: do j=lower,upper
-          iatom: do k=lower,upper
+        oatom2: do j=lower,upper
+          iatom2: do k=lower,upper
             xi = array(3,j,m) - array(3,k,n)
             xi = xi - real(Lx*anint(xi/Lx),dp)
             yi = array(4,j,m) - array(4,k,n)
@@ -569,15 +563,15 @@ subroutine rg(lower,upper,nmols)
             zi = array(5,j,m) - array(5,k,n)
             zi = zi - real(Lx*anint(zi/Lx),dp)
             rdiff = rdiff + xi**2.0_dp + yi**2.0_dp + zi**2.0_dp
-          end do iatom
-        end do oatom
+          end do iatom2
+        end do oatom2
       end if 
     end do imol
   end do omol
   !$OMP END PARALLEL DO
   rtot = 1.0_dp*sqrt(rdiff/((Nmol*molsize)**2.0_dp))
   write(41,"(f0.6,a)") rtot
-end subroutine rg
+end subroutine rg_tot
 
 !*************************************!
 ! Calculate Ree -- Rui Apóstolo, 2018 !
@@ -656,12 +650,12 @@ if (present(i_pq) .and. present(d_pq)) then
         if (n==o) then
           do j = lower,upper-1 
             do k = j+1,upper
-                xj    = array(3,j,n) - array(3,k,o)
-                xj= xj - real(Lx*anint(xj/Lx),dp)
-                yj    = array(4,j,n) - array(4,k,o)
-                yj= yj - real(Ly*anint(yj/Ly),dp)
-                zj    = array(5,j,n) - array(5,k,o)
-                zj= zj - real(Lz*anint(zj/Lz),dp)
+                xj = array(3,j,n) - array(3,k,o)
+                xj = xj - real(Lx*anint(xj/Lx),dp)
+                yj = array(4,j,n) - array(4,k,o)
+                yj = yj - real(Ly*anint(yj/Ly),dp)
+                zj = array(5,j,n) - array(5,k,o)
+                zj = zj - real(Lz*anint(zj/Lz),dp)
                 qdiff = 1.0_dp*dsqrt(xj**2.0_dp + yj**2.0_dp + zj**2.0_dp)
                 qvalues  = qvalues + 2.0_dp * sin(q*qdiff)/(q*qdiff)
                 ind_qvalues = ind_qvalues + 2.0_dp * sin(q*qdiff)/(q*qdiff)
@@ -670,12 +664,12 @@ if (present(i_pq) .and. present(d_pq)) then
         else
           do j = lower,upper
             do k = lower,upper
-                xj    = array(3,j,n) - array(3,k,o)
-                xj= xj - real(Lx*anint(xj/Lx),dp)
-                yj    = array(4,j,n) - array(4,k,o)
-                yj= yj - real(Ly*anint(yj/Ly),dp)
-                zj    = array(5,j,n) - array(5,k,o)
-                zj= zj - real(Lz*anint(zj/Lz),dp)
+                xj = array(3,j,n) - array(3,k,o)
+                xj = xj - real(Lx*anint(xj/Lx),dp)
+                yj = array(4,j,n) - array(4,k,o)
+                yj = yj - real(Ly*anint(yj/Ly),dp)
+                zj = array(5,j,n) - array(5,k,o)
+                zj = zj - real(Lz*anint(zj/Lz),dp)
                 qdiff = 1.0_dp*dsqrt(xj**2.0_dp + yj**2.0_dp + zj**2.0_dp)
                 qvalues  = qvalues + 2.0_dp * sin(q*qdiff)/(q*qdiff)
                 diff_qvalues = diff_qvalues + 2.0_dp * sin(q*qdiff)/(q*qdiff)

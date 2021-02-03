@@ -3,7 +3,7 @@
 This program aims to be a modular toolkit for the calculation of physical properties from MD simulation outputs.
 
 Tools:
-- Calculates Rg from average distance of all atoms.
+- Calculates Rg from average distance of all atoms (in the same molecule, or all).
 - Calculates Ree.
 - Calculates p(q) from the positions of atoms for one or more molecules.
 - Calculates p(q) from the positions of atoms for smae-molecule and different-molecule in multi-molecule systems.
@@ -47,28 +47,8 @@ Exponent of lower limit of p(q) calculation
 Exponent of higher limit of p(q) calculation  
 Number of points used as q in p(q) calculation  
 
+## Changelog
 
-
-## Speedup improvements:
-
-+ before changes  
-calculating only p(q)  
-real    57m0.304s  
-user    357m27.428s  
-sys     0m11.928s  
-
-
-+ After Changes  
-Collapsed do loop into arrays  
-Improved OMP scheduling  
-Expanded use of double_precision variables  
-Also calculating p_ind(q)  
-real    39m5.838s  
-user    181m18.248s  
-sys     0m4.320s  
-
-+ After changes supramentioned  
-but calculating only p(q)  
-real    37m25.574s  
-user    162m23.588s  
-sys     0m6.400s  
+* Version 2.1:
+  * Added 'Indivudual Rg' calculation switch: if true calculates Rg for each molecule, if false consideres every molecule part of the same 'cluste' and calculates the Rg for said cluster (new 'Total Rg' subroutine).
+  * Added OMP support for the new 'Total Rg' subroutine.
