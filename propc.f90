@@ -796,10 +796,9 @@ subroutine decwrite(bool,module)
   implicit none
   character(len=*),intent(in) :: module
   logical,intent(in)::bool
-  if (bool .eqv. .true. ) write(6,*) "Calculating                             ",module
-  if (bool .eqv. .false.) write(6,*) "Skipping                                ",module
+  if (bool .eqv. .true. ) write(6,*) "Calculating                              ",module
+  if (bool .eqv. .false.) write(6,*) "Skipping                                 ",module
 end subroutine
-
 
 !*********************************************!
 ! Converts integers to strings - Rui Apóstolo !
