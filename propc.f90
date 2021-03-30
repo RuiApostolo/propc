@@ -6,10 +6,12 @@ program propc
 ! double precision added by Rui Apóstolo in 2019
 ! average vs total Rg added by Rui Apóstolo in 2021
 ! University of Edinburgh
-! version 2.1 -- 2021/02/03
-! changelog from 2.0:
-! added boolean trigger for averaging RG (for dimers) or not (for micelles)
-! fixed timing modules
+! version 2.2 -- 2021/03/30
+! changelog from 2.1:
+! - fixed timing modules - ETA had a bug
+! - added ReeFirstAtom and ReeLastAtom to allow calculation of Ree in molcules
+! where the edge atoms where not the first and last in the datafile order.
+! - added version number to params.in
 use omp_lib
 use, intrinsic :: iso_fortran_env
 implicit none
@@ -67,7 +69,13 @@ read(5,'(I6)',iostat=ierror)      MolSize
   if (ierror /= 0) call systemexit("MolSize")
 read(5,'(I6)',iostat=ierror)      MolStart
   if (debug .eqv. .true.) write(debugf,*) "MolStart", MolStart
-  if (ierror /= 0) call systemexit("MolStart")
+  if (ierror /= 0) call systemexit("MolStartType")
+read(5,'(I6)',iostat=ierror)      ReeFirst
+  if (debug .eqv. .true.) write(debugf,*) "ReeFirst", ReeFirst
+  if (ierror /= 0) call systemexit("ReeFirstAtom")
+read(5,'(I6)',iostat=ierror)      ReeLast
+  if (debug .eqv. .true.) write(debugf,*) "ReeLast", ReeLast
+  if (ierror /= 0) call systemexit("ReeLastAtom")
 read(5,'(I6)',iostat=ierror)      StepOutput
   if (debug .eqv. .true.) write(debugf,*) "StepOutput", StepOutput
   if (ierror /= 0) call systemexit("StepOutput")
@@ -161,6 +169,20 @@ if (MolStart < 1) then
   write(6,*) "'MolStart' line in params.in must be an integer bigger than 0."
   call EXIT(65)
 end if
+if (ReeFirst < 0) then
+  write(6,*) "'ReeFirstAtom' line in params.in must be an integer bigger than or equal to 0."
+  call EXIT(65)
+else if (ReeFirst > MolSize) then
+  write(6,*) "ReeFirstAtom can't be outside the target molecule, ReeFirstAtom <= MolSize."
+  call EXIT(65)
+end if
+if (ReeLast < 0) then
+  write(6,*) "'ReeLastAtom' line in params.in must be an integer bigger than or equal to 0."
+  call EXIT(65)
+else if (ReeLast > MolSize) then
+  write(6,*) "ReeLastAtom can't be outside the target molecule, ReeLastAtom <= MolSize."
+  call EXIT(65)
+end if
 if (StepOutput < 1) then
   write(6,*) "'StepOutput' line in params.in must be an integer bigger than 0."
   call EXIT(65)
@@ -205,16 +227,20 @@ call decwrite(b_ree,"Ree")
 call decwrite(b_pq,"p(q)")
 call decwrite(b_ind_pq,"individual p(q)")
 call decwrite(b_trj,"Edited trj file")
-write(6,*)      "Number of Rows in input file:           ",trim(i2str(Columns))
-write(6,*)      "Last step number:                       ",trim(i2str(StepMax))
-write(6,*)      "Ignoring first:                         ",trim(i2str(IgnoreFirst))," timesteps"
-write(6,*)      "Molecule Size:                          ",trim(i2str(MolSize))
-write(6,*)      "Number of molecules                     ",trim(i2str(NMol))
-write(6,*)      "Type number for first atom in Molecule: ",trim(i2str(MolStart))
-write(6,*)      "Status will be echoed on console every: ",trim(i2str(StepOutput))," timesteps"
-write(6,*)      "Form factor lower exponent:             ",trim(r2str(lmin))
-write(6,*)      "Form factor higher exponent:            ",trim(r2str(lmax))
-write(6,*)      "Form factor number of q points:         ",trim(i2str(qpoints))
+write(6,*)      "Number of Rows in input file:            ",trim(i2str(Columns))
+write(6,*)      "Last step number:                        ",trim(i2str(StepMax))
+write(6,*)      "Ignoring first:                          ",trim(i2str(IgnoreFirst))," timesteps"
+write(6,*)      "Molecule Size:                           ",trim(i2str(MolSize))
+write(6,*)      "Number of molecules                      ",trim(i2str(NMol))
+write(6,*)      "Type number for first atom in Molecule:  ",trim(i2str(MolStart))
+if (ReeFirst == 0) ReeFirst = 1
+write(6,*)      "Index of first atom for Ree calculation: ",trim(i2str(ReeFirst))
+if (ReeLast == 0) ReeLast = MolSize
+write(6,*)      "Index of last atom for Ree calculation:  ",trim(i2str(ReeLast))
+write(6,*)      "Status will be echoed on console every:  ",trim(i2str(StepOutput))," timesteps"
+write(6,*)      "Form factor lower exponent:              ",trim(r2str(lmin))
+write(6,*)      "Form factor higher exponent:             ",trim(r2str(lmax))
+write(6,*)      "Form factor number of q points:          ",trim(i2str(qpoints))
 write(6,*)
 
 if (debug .eqv. .true.) write(debugf,*) "Input done"
@@ -313,7 +339,7 @@ do Nstep=IgnoreFirst+1,stepmax
   call molrebuild
   if ((b_rg .eqv. .true.) .and. (b_rg_ind .eqv. .true.)) call rg_ind(1,molsize,NMol)
   if ((b_rg .eqv. .true.) .and. (b_rg_ind .eqv. .false.)) call rg_tot(1,molsize,NMol)
-  if (b_ree .eqv. .true.) call ree(1,molsize,NMol)
+  if (b_ree .eqv. .true.) call ree(ReeFirst,ReeLast,NMol)
   if ((b_pq .eqv. .true.) .and. (b_ind_pq .eqv. .false.)) call formfactor(1,molsize,NMol,total_pq)
   if ((b_pq .eqv. .true.) .and. (b_ind_pq .eqv. .true.)) call formfactor(1,molsize,NMol,total_pq,ind_pq,diff_pq)
   if (b_trj .eqv. .true.) call outputtrj(1,molsize,NMol)
@@ -863,7 +889,7 @@ subroutine timer(steps)
   time_since_ready = tock(ready_time)
   call texttime(time_since_last,tsl)
   call texttime(time_since_ready,tss)
-  call texttime(int(((stepmax/steps)*(time_since_ready))-time_since_ready,kind=8),eta)
+  call texttime(int(((real(stepmax, dp)/steps)*(time_since_ready))-time_since_ready,kind=8),eta)
   write(6,*) steps, " ", tsl, tss, eta
   call tick(last_time)
 end subroutine timer

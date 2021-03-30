@@ -1,4 +1,4 @@
- ! real kind parametrs
+! real kind parametrs
 integer, parameter :: sp = selected_real_kind(6, 37)
 integer, parameter :: dp = selected_real_kind(15, 307)
 ! integer, parameter :: qp = selected_real_kind(33, 4931)
@@ -15,6 +15,7 @@ real(dp) :: Lx, Ly, Lz, Hx, Hy, Hz, lmin, lmax
 ! integers
 integer(sp)::l,ierror,Natom,Nstep,NMol,mol,qpoints,inputf=20,debugf=90
 integer(sp)::Columns,StepMax,IgnoreFirst,Molsize,MolStart,StepOutput
+integer(sp)::ReeFirst,ReeLast
 
 ! logicals
 ! logical :: qtrig=.true.

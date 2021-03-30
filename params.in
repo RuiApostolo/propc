@@ -1,4 +1,4 @@
-# Be careful of ammount of spaces (min col 12)
+# Be careful of ammount of spaces (min col 12), propc version 2.2
 nptpro.lammpstrj
 
 t           Calculate Rg?
@@ -13,6 +13,8 @@ f           Write output trajectory?
 20          NMol
 65          MolSize
 3           MolStartType
+0           ReeFirstAtom (0 == ReeFirstAtom = 1)
+0           ReeLastAtom (0 == ReeLastAtom = MolSize)
 50          StepOutput
 -3.0        p(q)_exp_low
 1.0         p(q)_exp_high
