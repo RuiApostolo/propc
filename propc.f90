@@ -6,9 +6,9 @@ program propc
 ! double precision added by Rui Apóstolo in 2019
 ! average vs total Rg added by Rui Apóstolo in 2021
 ! University of Edinburgh
-! version 2.2 -- 2021/03/30
+! version 2.2.1 -- 2021/04/05
 ! changelog from 2.1:
-! - fixed timing modules - ETA had a bug
+! - fixed timing modules - ETA had ~a~ several bugs (2.2.1)
 ! - added ReeFirstAtom and ReeLastAtom to allow calculation of Ree in molcules
 ! where the edge atoms where not the first and last in the datafile order.
 ! - added version number to params.in
@@ -888,7 +888,7 @@ subroutine timer(steps)
   time_since_ready = tock(ready_time)
   call texttime(time_since_last,tsl)
   call texttime(time_since_ready,tss)
-  call texttime(int(((real(stepmax, dp)/steps)*(time_since_ready))-time_since_ready,kind=8),eta)
+  call texttime(int(((real(StepMax-IgnoreFirst, dp)/(steps-IgnoreFirst))*(time_since_ready))-time_since_ready,kind=8),eta)
   write(6,*) steps, " ", tsl, tss, eta
   call tick(last_time)
 end subroutine timer

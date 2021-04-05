@@ -52,6 +52,9 @@ Number of points used as q in p(q) calculation
 
 ## Changelog
 
+* Version 2.2.1 -- 2021/04/05
+  * fixed timing module - ETA wasn't considering skipped timesteps into calculation, so it was underestimating total time in the cases where timesteps were being skipped.
+
 * Version 2.2 -- 2021/03/30:
   * fixed timing modules - ETA had a bug.
   * added ReeFirstAtom and ReeLastAtom to allow calculation of Ree in molcules where the edge atoms where not the first and last in the datafile order.
