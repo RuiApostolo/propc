@@ -8,18 +8,22 @@ real(dp),dimension(:,:,:),allocatable::array
 real(dp),dimension(:,:),allocatable::hold
 real(dp),dimension(3,2)::Volume
 real(dp),dimension(:),allocatable::timestep,ind_pq,total_pq,diff_pq
+real(dp),dimension(:),allocatable::weights
 
 ! real
 real(dp) :: Lx, Ly, Lz, Hx, Hy, Hz, lmin, lmax
 
 ! integers
-integer(sp)::l,ierror,Natom,Nstep,NMol,mol,qpoints,inputf=20,debugf=90
+integer(sp)::l,l2,ierror,Natom,Nstep,NMol,mol,qpoints
+integer(sp)::inputf=20,weightsf=30,debugf=90
 integer(sp)::Columns,StepMax,IgnoreFirst,Molsize,MolStart,StepOutput
-integer(sp)::ReeFirst,ReeLast
+integer(sp)::ReeFirst,ReeLast,Atom_Max_g
 
 ! logicals
-! logical :: qtrig=.true.
-logical :: debug,b_rg,b_rg_ind,b_ree,b_pq,b_trj,b_ind_pq
+logical :: b_rg,b_rg_ind,b_ree,b_pq,b_w_pq,b_trj,b_pq_ind
+logical :: debug=.false.,call_exit=.false.,input_exists=.false.
+logical :: weight_exists=.false.
+logical, dimension(:), allocatable :: max_mask
 
 ! strings
 character(LEN=80),dimension(4)::headertext

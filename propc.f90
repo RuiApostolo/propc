@@ -5,19 +5,19 @@ program propc
 ! minimum image convention implemented by Joanna Faulds in 2019
 ! double precision added by Rui Apóstolo in 2019
 ! average vs total Rg added by Rui Apóstolo in 2021
+! weighted form factor added by Rui Apóstolo in 2021
 ! University of Edinburgh
-! version 2.2.1 -- 2021/04/05
-! changelog from 2.1:
-! - fixed timing modules - ETA had ~a~ several bugs (2.2.1)
-! - added ReeFirstAtom and ReeLastAtom to allow calculation of Ree in molcules
-! where the edge atoms where not the first and last in the datafile order.
-! - added version number to params.in
+! version 2.3 -- 2021/11/29
+! changelog from 2.2:
+!  * added a new, optional weighted form factor calculation. To use it, you need a weights.in file
+!  * added check for inputfile, and error message if it doesn't exist.
+!  * added checks for outputfiles, and error messages if they already exist.
+!  * incremented version number to params.in
 use omp_lib
 use, intrinsic :: iso_fortran_env
 implicit none
 include 'variables.inc'
 
-debug = .false.
 if (debug .eqv. .true.) then
   open(unit=debugf, file='debug.log', action='write', status='replace')
   write(6,*) "DEBUG MODE ON - CHECK DEBUG.LOG"
@@ -46,8 +46,11 @@ read(5,'(L6)',iostat=ierror)      b_ree
 read(5,'(L6)',iostat=ierror)      b_pq
   if (debug .eqv. .true.) write(debugf,*) "b_pq", b_pq
   if (ierror /= 0) call systemexit("Calculate p(q)")
-read(5,'(L6)',iostat=ierror)      b_ind_pq
-  if (debug .eqv. .true.) write(debugf,*) "b_ind_pq", b_ind_pq
+read(5,'(L6)',iostat=ierror)      b_w_pq
+  if (debug .eqv. .true.) write(debugf,*) "b_w_pq", b_w_pq
+  if (ierror /= 0) call systemexit("Weight p(q)")
+read(5,'(L6)',iostat=ierror)      b_pq_ind
+  if (debug .eqv. .true.) write(debugf,*) "b_pq_ind", b_pq_ind
   if (ierror /= 0) call systemexit("Calculate individual p(q)")
 read(5,'(L6)',iostat=ierror)      b_trj
   if (debug .eqv. .true.) write(debugf,*) "b_trj", b_trj
@@ -96,46 +99,38 @@ if (debug .eqv. .true.) then
   write(debugf,*) 
   write(debugf,*) 
   write(debugf,*) "b_pq", b_pq
-  write(debugf,*) "b_ind_pq", b_ind_pq
-  write(debugf,*) b_pq .and. b_ind_pq
+  write(debugf,*) "b_pq_ind", b_pq_ind
+  write(debugf,*) b_pq .and. b_pq_ind
 end if
 
 
 
 ! Input sanity checks
+write(6,*) "Checking parameters:"
+! see /usr/include/sysexits.h for error codes
 if (Inputfile == "") then
   write(6,*) "No name for input file given."
-  ! see /usr/include/sysexits.h for error codes
-  call EXIT(65)
+  call_exit = .true.
 end if
 if ((b_rg_ind .eqv. .true.) .and. (b_rg .eqv. .false.)) then
   write(6,*) "Calculating the Rg for each molecule needs the Rg to be calculated at all. Changed b_rg to true."
-  ! read(5,*)  answer
-  ! call userexit(answer)
   b_rg = .true.
-  ! write(6,*) "bool_calc_pq set to true"
 end if
-if ((b_ind_pq .eqv. .true.) .and. (b_pq .eqv. .false.)) then
+if ((b_pq_ind .eqv. .true.) .and. (b_pq .eqv. .false.)) then
   write(6,*) "Individual P(q) requires normal P(q) calculation. Changed b_pq to true."
-  ! read(5,*)  answer
-  ! call userexit(answer)
   b_pq = .true.
-  ! write(6,*) "bool_calc_pq set to true"
 end if
-if ((b_ind_pq .eqv. .true.) .and. (NMol < 2)) then
+if ((b_pq_ind .eqv. .true.) .and. (NMol < 2)) then
   write(6,*) "Individual P(q) only valid for systems with more than one molecule. Changed b_ind_q to false."
-  ! read(5,*)  answer
-  ! call userexit(answer)
-  b_ind_pq = .false.
-  ! write(6,*) "bool_calc_individual_pq set to false"
+  b_pq_ind = .false.
 end if
 if (Columns < 5) then
   write(6,*) "'Columns' line in params.in must be an integer bigger than 4. X, Y and Z should be on rows 3, 4 and 5, respectively."
-  call EXIT(65)
+  call_exit = .true.
 end if
 if (StepMax < 0) then
   write(6,*) "'StepMax' line in params.in must be an integer bigger than 0."
-  call EXIT(65)
+  call_exit = .true.
 else if (StepMax < 1001) then
   write(6,*) StepMax," steps is an unusually low number for StepMax, make sure it's correct."
 end if
@@ -144,63 +139,61 @@ if (StepMax-IgnoreFirst > 19999) then
 end if
 if (StepMax-IgnoreFirst < 1) then
   write(6,*)      "StepMax - IgnoreFirst  must be an integer bigger than 0."
-  call EXIT(65)
+  call_exit = .true.
 else if (StepMax-IgnoreFirst < 4999) then
   write(6,*) StepMax-IgnoreFirst," steps is an unusually low number of steps, make sure it's correct."
 else if (IgnoreFirst < 0) then
   write(6,*) "'IgnoreFirst' line in params.in must be an integer bigger than or equal to 0."
-  call EXIT(65)
+  call_exit = .true.
 end if
 if (NMol < 1) then
   write(6,*) "'NMol' line in params.in must be an integer bigger than 0."
-  call EXIT(65)
+  call_exit = .true.
 else if (NMol > 10) then
   write(6,*) NMol," molecules is an unusually high number for NMol, make sure it's correct."
 end if
 if (MolSize < 1) then
   write(6,*) "'MolSize' line in params.in must be an integer bigger than 0."
-  call EXIT(65)
-else if (MolSize < 101) then
-  write(6,*) MolSize," atoms is an unusually low number for MolSize, make sure it's correct."
+  call_exit = .true.
 else if (MolSize > 1999) then
   write(6,*) MolSize," atoms is an unusually high number for MolSize, make sure it's correct."
 end if
 if (MolStart < 1) then
   write(6,*) "'MolStart' line in params.in must be an integer bigger than 0."
-  call EXIT(65)
+  call_exit = .true.
 end if
 if (ReeFirst < 0) then
   write(6,*) "'ReeFirstAtom' line in params.in must be an integer bigger than or equal to 0."
-  call EXIT(65)
+  call_exit = .true.
 else if (ReeFirst > MolSize) then
   write(6,*) "ReeFirstAtom can't be outside the target molecule, ReeFirstAtom <= MolSize."
-  call EXIT(65)
+  call_exit = .true.
 end if
 if (ReeLast < 0) then
   write(6,*) "'ReeLastAtom' line in params.in must be an integer bigger than or equal to 0."
-  call EXIT(65)
+  call_exit = .true.
 else if (ReeLast > MolSize) then
   write(6,*) "ReeLastAtom can't be outside the target molecule, ReeLastAtom <= MolSize."
-  call EXIT(65)
+  call_exit = .true.
 end if
 if (StepOutput < 1) then
   write(6,*) "'StepOutput' line in params.in must be an integer bigger than 0."
-  call EXIT(65)
+  call_exit = .true.
 else if (StepOutput > 200) then
   write(6,*) StepOutput," is a large number of steps between console echoes. It might take a while to show."
 end if
 if (lmin < -3.0) then
   write(6,*) lmin,"is a very low number for the low exponent of the form factor, make sure it's correct."
-  call EXIT(65)
+  call_exit = .true.
 else if (lmin > -1.0) then
   write(6,*) lmin,"is a very high number for the low exponent of the form factor, make sure it's correct."
 end if
 if (lmax <= lmin) then
   write(6,*) "lmax must be higher than lmin"
-  call EXIT(65)
+  call_exit = .true.
 else if (lmax < -0.0) then
   write(6,*) lmax,"is a very low number for the high exponent of the form factor, make sure it's correct."
-  call EXIT(65)
+  call_exit = .true.
 else if (lmax > 2.0) then
   write(6,*) lmax,"is a very high number for the high exponent of the form factor, make sure it's correct."
 end if
@@ -208,9 +201,75 @@ if (qpoints < 1) then
   write(6,*) "'p(q)_num_points' line in params.in must be an integer bigger than 0."
 else if (qpoints < 100) then
   write(6,*) qpoints,"is a very low number for the number of q points, make sure it's correct."
-  call EXIT(65)
+  call_exit = .true.
 else if (qpoints > 200) then
   write(6,*) qpoints,"is a very high number for the number of q points, make sure it's correct."
+end if
+
+! file checks
+write(6,*) ""
+write(6,*) "Checking input and output files:"
+inquire(file=Inputfile, exist=input_exists)
+if (input_exists .eqv. .false.) then
+    write(6,*) "      Input file ",trim(Inputfile)," doesn't exist. Exiting."
+    call_exit = .true.
+end if
+if (b_w_pq .eqv. .true.) then
+  inquire(file="weights.in", exist=weight_exists)
+  if (weight_exists .eqv. .false.) then
+      write(6,*) "      Input file weights.in doesn't exist. Exiting."
+      call_exit = .true.
+  end if
+else if ((b_w_pq .eqv. .false.) .and. (input_exists .eqv. .true.)) then
+  ! get max atom_type
+  call readheader
+  allocate(array(Columns,MolSize,NMol))
+  allocate(max_mask(Columns))
+  max_mask = .false.
+  max_mask(2) = .true.
+  call readdata(MolStart,NMol,MolSize,Natom,Columns)
+  Atom_Max_g = maxval(maxval(array(2,:,:), dim=1),dim=1)
+  if (debug .eqv. .true.) write(debugf,*) "max atom type", Atom_Max_g
+  ! allocate weights
+  allocate(weights(Atom_Max_g))
+  weights = 0.0_dp
+  do l=1,NMol
+    do l2=1,molsize
+      weights(int(array(2,l,l2))) = 1.0_dp
+    end do
+  end do
+  ! cleanup
+  deallocate(array)
+  rewind(inputf)
+end if
+
+if (b_rg .eqv. .true.) then
+  call check_file("rg.dat")
+  if (b_rg_ind .eqv. .true.) then
+    call check_file("rg_per_molecule.dat")
+  end if
+end if
+
+if (b_ree .eqv. .true.) then
+  call check_file("ree.dat")
+end if
+
+if (b_pq .eqv. .true.) then
+  call check_file("pq.dat")
+  if (b_pq_ind .eqv. .true.) then
+    call check_file("pq_ind.dat")
+    call check_file("pq_all.dat")
+    call check_file("pq_diff.dat")
+  end if
+end if
+
+if (b_trj .eqv. .true.) then
+  call check_file(trim(adjustl(Outputprefix//"processed.lammpstrj")))
+end if
+
+! exit because of input errors
+if (call_exit .eqv. .true.) then
+  call EXIT(65)
 end if
 
 ! ouput parameters
@@ -225,7 +284,8 @@ else
 end if
 call decwrite(b_ree,"Ree")
 call decwrite(b_pq,"p(q)")
-call decwrite(b_ind_pq,"individual p(q)")
+call decwrite(b_w_pq,"weighted p(q)")
+call decwrite(b_pq_ind,"individual p(q)")
 call decwrite(b_trj,"Edited trj file")
 write(6,*)      "Number of Rows in input file:            ",trim(i2str(Columns))
 write(6,*)      "Last step number:                        ",trim(i2str(StepMax))
@@ -254,7 +314,7 @@ if (b_pq .eqv. .true.) then
   allocate(total_pq(0:qpoints-1))
   total_pq = 0.0_dp
 end if
-if (b_ind_pq .eqv. .true.) then
+if (b_pq_ind .eqv. .true.) then
   allocate(ind_pq(0:qpoints-1))
   allocate(diff_pq(0:qpoints-1))
   ind_pq = 0.0_dp
@@ -263,6 +323,7 @@ end if
 if (debug .eqv. .true.) write(debugf,*) "allocated variables"
 ! open input file
 open(inputf,file=Inputfile,action='read',status='old')
+if (b_w_pq .eqv. .true.) call read_weights("weights.in")
 ! open output files
 if (b_rg  .eqv. .true.) then
   if (b_rg_ind .eqv. .true.) then
@@ -288,7 +349,7 @@ end if
 if (b_pq  .eqv. .true.) then
   open(unit=43, file='pq.dat', action='write', status='new')
 end if
-if (b_ind_pq  .eqv. .true.) then
+if (b_pq_ind  .eqv. .true.) then
   open(unit=45, file='pq_ind.dat', action='write', status='new')
   open(unit=46, file='pq_all.dat', action='write', status='new')
   open(unit=47, file='pq_diff.dat', action='write', status='new')
@@ -340,8 +401,8 @@ do Nstep=IgnoreFirst+1,stepmax
   if ((b_rg .eqv. .true.) .and. (b_rg_ind .eqv. .true.)) call rg_ind(1,molsize,NMol)
   if ((b_rg .eqv. .true.) .and. (b_rg_ind .eqv. .false.)) call rg_tot(1,molsize,NMol)
   if (b_ree .eqv. .true.) call ree(ReeFirst,ReeLast,NMol)
-  if ((b_pq .eqv. .true.) .and. (b_ind_pq .eqv. .false.)) call formfactor(1,molsize,NMol,total_pq)
-  if ((b_pq .eqv. .true.) .and. (b_ind_pq .eqv. .true.)) call formfactor(1,molsize,NMol,total_pq,ind_pq,diff_pq)
+  if ((b_pq .eqv. .true.) .and. (b_pq_ind .eqv. .false.)) call formfactor(1,molsize,NMol,total_pq)
+  if ((b_pq .eqv. .true.) .and. (b_pq_ind .eqv. .true.)) call formfactor(1,molsize,NMol,total_pq,ind_pq,diff_pq)
   if (b_trj .eqv. .true.) call outputtrj(1,molsize,NMol)
 end do
 
@@ -351,7 +412,7 @@ if (b_pq .eqv. .true.) then
   end do
 end if
 
-if (b_ind_pq .eqv. .true.) then
+if (b_pq_ind .eqv. .true.) then
   write(46,*) "#q tot_pq ind_pq tot_div_ind_pq diff_pq"
   do l=0,qpoints-1
     write(45,*) 10.0_dp**(lmin + real(l)/real(qpoints) * (lmax-lmin)), ind_pq(l)
@@ -452,7 +513,7 @@ subroutine readdata(mstart,nmols,msize,atoms,col)
           ! write(debugf,*) (array(n,k,j),j=1,col)
         ! end do
       ! end if
-      n = n+1
+      n = n + 1
       if (debug .eqv. .true.) write(debugf,*) "finishing readdata molecule loop"
     end if
   end do readloop
@@ -624,7 +685,7 @@ subroutine formfactor(lower,upper,nmols,t_pq,i_pq,d_pq)
   integer(sp),intent(in)::lower,upper,nmols
   real(dp),dimension(:),allocatable,intent(inout)::t_pq
   real(dp),dimension(:),allocatable,intent(inout),optional::i_pq,d_pq
-  real(dp):: xj, yj, zj, qdiff
+  real(dp):: xj, yj, zj, qdiff, weight, tot_weight
   real(dp),dimension(:),allocatable::qvalues,pvalues,q,ind_qvalues,ind_pvalues,diff_qvalues
   integer(sp):: j,k,m,n,o
   if (debug .eqv. .true.) write(debugf,*) "started formfactor"
@@ -644,22 +705,23 @@ subroutine formfactor(lower,upper,nmols,t_pq,i_pq,d_pq)
   qvalues = 0.0_dp
   pvalues = 0.0_dp
   q = 0.0_dp
+  tot_weight=real(upper*nmols,dp)
   do m=0,qpoints-1
     ! q(m) = 10.0**((1.0*((abs(lmin)+abs(lmax))/(1.0*qpoints))*m)+lmin)
     q(m) = 10.0_dp**(lmin + real(m,dp)/real(qpoints,dp) * (lmax-lmin))
   end do
 
   if (b_pq .eqv. .true.)     qvalues = real(upper*nmols,dp)
-  if (b_ind_pq .eqv. .true.) ind_qvalues = real(upper,dp)
-  if (b_ind_pq .eqv. .true.) diff_qvalues = 0.0_dp
+  if (b_pq_ind .eqv. .true.) ind_qvalues = real(upper,dp)
+  if (b_pq_ind .eqv. .true.) diff_qvalues = 0.0_dp
 
 if (present(i_pq) .and. present(d_pq)) then
   !$OMP PARALLEL DO            &
   !$OMP SCHEDULE(AUTO)      &
   !$OMP DEFAULT(none)        &
-  !$OMP SHARED(array,q, Lx, Ly, Lz, nmols, lower, upper) &
-  !$OMP PRIVATE(j, k, xj, yj, zj, qdiff,o,n) &
-  !$OMP REDUCTION(+:qvalues,ind_qvalues,diff_qvalues)
+  !$OMP SHARED(array,q, Lx, Ly, Lz, nmols, lower, upper, weights) &
+  !$OMP PRIVATE(j, k, xj, yj, zj, qdiff,o,n,weight) &
+  !$OMP REDUCTION(+:qvalues,ind_qvalues,diff_qvalues,tot_weight)
     ! write(6,*) m, q(m)
     ! if (debug .eqv. .true.) write(debugf,*) dummy_variable
     do n=1,nmols
@@ -674,7 +736,10 @@ if (present(i_pq) .and. present(d_pq)) then
                 zj = array(5,j,n) - array(5,k,o)
                 zj = zj - real(Lz*anint(zj/Lz),dp)
                 qdiff = 1.0_dp*dsqrt(xj**2.0_dp + yj**2.0_dp + zj**2.0_dp)
-                qvalues  = qvalues + 2.0_dp * sin(q*qdiff)/(q*qdiff)
+                weight = weights(int(array(2,j,n))) + weights(int(array(2,k,o)))
+                tot_weight = tot_weight + weight
+                qvalues  = qvalues + weight * sin(q*qdiff)/(q*qdiff)
+                ! qvalues  = qvalues + 2.0_dp * sin(q*qdiff)/(q*qdiff)
                 ind_qvalues = ind_qvalues + 2.0_dp * sin(q*qdiff)/(q*qdiff)
             end do
           end do
@@ -688,17 +753,20 @@ if (present(i_pq) .and. present(d_pq)) then
                 zj = array(5,j,n) - array(5,k,o)
                 zj = zj - real(Lz*anint(zj/Lz),dp)
                 qdiff = 1.0_dp*dsqrt(xj**2.0_dp + yj**2.0_dp + zj**2.0_dp)
-                qvalues  = qvalues + 2.0_dp * sin(q*qdiff)/(q*qdiff)
-                diff_qvalues = diff_qvalues + 2.0_dp * sin(q*qdiff)/(q*qdiff)
+                weight = weights(int(array(2,j,n))) + weights(int(array(2,k,o)))
+                tot_weight = tot_weight + weight
+                qvalues  = qvalues + weight * sin(q*qdiff)/(q*qdiff)
+                ! qvalues  = qvalues + 2.0_dp * sin(q*qdiff)/(q*qdiff)
+                diff_qvalues = diff_qvalues + weight * sin(q*qdiff)/(q*qdiff)
             end do
           end do
         end if
       end do
     end do
   !$OMP END PARALLEL DO
-  ind_pvalues = ind_qvalues / real(nmols*(upper**2),dp)
+  ind_pvalues = ind_qvalues / real(tot_weight/nmols,dp)
   ! diff_pvalues = diff_qvalues / real(nmols*(upper**2),dp)
-  pvalues= qvalues / real(((upper*NMol)**2),dp)
+  pvalues= qvalues / real(tot_weight,dp)
   t_pq = t_pq + pvalues/real(StepMax-IgnoreFirst,dp)
   i_pq = i_pq + ind_pvalues/real(StepMax-IgnoreFirst,dp)
   d_pq = d_pq + diff_qvalues/real(StepMax-IgnoreFirst,dp)
@@ -706,9 +774,9 @@ else
   !$OMP PARALLEL DO            &
   !$OMP SCHEDULE(AUTO)      &
   !$OMP DEFAULT(none)        &
-  !$OMP SHARED(array,q, Lx, Ly, Lz, nmols, lower, upper) &
-  !$OMP PRIVATE(j, k, xj, yj, zj, qdiff,o,n) &
-  !$OMP REDUCTION(+:qvalues)
+  !$OMP SHARED(array,q, Lx, Ly, Lz, nmols, lower, upper, weights) &
+  !$OMP PRIVATE(j, k, xj, yj, zj, qdiff,o,n,weight) &
+  !$OMP REDUCTION(+:qvalues,tot_weight)
     ! write(6,*) m, q(m)
     ! if (debug .eqv. .true.) write(debugf,*) dummy_variable
     do n=1,nmols
@@ -723,7 +791,10 @@ else
                 zj    = array(5,j,n) - array(5,k,o)
                 zj= zj - real(Lz*anint(zj/Lz),dp)
                 qdiff = 1.0_dp*dsqrt(xj**2.0_dp + yj**2.0_dp + zj**2.0_dp)
-                qvalues  = qvalues + 2.0_dp * sin(q*qdiff)/(q*qdiff)
+                weight = weights(int(array(2,j,n))) + weights(int(array(2,k,o)))
+                tot_weight = tot_weight + weight
+                qvalues  = qvalues + weight * sin(q*qdiff)/(q*qdiff)
+                ! qvalues  = qvalues + 2.0_dp * sin(q*qdiff)/(q*qdiff)
             end do
           end do
         else
@@ -736,14 +807,17 @@ else
                 zj    = array(5,j,n) - array(5,k,o)
                 zj= zj - real(Lz*anint(zj/Lz),dp)
                 qdiff = 1.0_dp*dsqrt(xj**2.0_dp + yj**2.0_dp + zj**2.0_dp)
-                qvalues  = qvalues + 2.0_dp * sin(q*qdiff)/(q*qdiff)
+                weight = weights(int(array(2,j,n))) + weights(int(array(2,k,o)))
+                tot_weight = tot_weight + weight
+                qvalues  = qvalues + weight * sin(q*qdiff)/(q*qdiff)
+                ! qvalues  = qvalues + 2.0_dp * sin(q*qdiff)/(q*qdiff)
             end do
           end do
         end if
       end do
     end do
   !$OMP END PARALLEL DO
-  pvalues= qvalues / real(((upper*NMol)**2),dp)
+  pvalues= qvalues / real(tot_weight,dp)
   t_pq = t_pq + pvalues/real(StepMax-IgnoreFirst,dp)
 end if
 end subroutine formfactor
@@ -909,5 +983,53 @@ subroutine userexit(answer)
       call EXIT(0)
   end select
 end subroutine userexit
+
+
+!******************************************
+! Checks if the file exists -- Rui Apóstolo
+!******************************************
+
+subroutine check_file(filename)
+  implicit none
+  character(len=*), intent(in) :: filename
+  logical :: file_exists=.false.
+  inquire(file=filename, exist=file_exists)
+  if (file_exists .eqv. .true.) then
+    write(6,*) "      File ",trim(filename)," already exists. Rename or delete before running the program."
+    call_exit = .true.
+  end if
+end subroutine check_file
+
+
+!**********************************
+! Read weights file -- Rui Apóstolo
+!**********************************
+
+subroutine read_weights(filename)
+  implicit none
+  character(len=*), intent(in) :: filename
+  integer::io,n,atom_max,temp1,i
+  real::temp2
+  ! open file
+  open(weightsf,file=filename,action='read',status='old')
+  ! check max atype
+  n = 0
+  atom_max = 0
+  do
+    read(weightsf, *, iostat=io) temp1, temp2
+    if (io /= 0) exit
+    n = n + 1
+    if (temp1 > atom_max) then
+      atom_max = temp1
+    end if
+  end do
+  rewind(weightsf)
+  ! read file
+  allocate(weights(atom_max))
+  weights = 0.0_dp
+  do i = 1, n
+    read(weightsf, *, iostat=io) temp1, weights(temp1)
+  end do
+end subroutine read_weights
 
 end program propc

@@ -1,10 +1,11 @@
-# Be careful of ammount of spaces (min col 12), propc version 2.2
+# Be careful of ammount of spaces (min col 12), propc version 2.3
 nptpro.lammpstrj
 
 t           Calculate Rg?
 f           Calc. Rg of individual molecules? (f=Rg of all atoms together)
 f           Calculate Ree?
 t           Calculate P(q)?
+t           Weigth P(q)?
 f           Calculate Individual P(q)?
 f           Write output trajectory?
 8           Number Columns

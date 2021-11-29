@@ -6,7 +6,8 @@ Tools:
 - Calculates Rg from average distance of all atoms (in the same molecule, or all).
 - Calculates Ree, if ReeFirstAtom and ReeLastAtom are 0, they will be taken as the first and last atom. Any other number (between 1 and MolSize) will be taken as the index of the atom to be used, starting with the first atom of MolStartType as index 1, and going in the order of the datafile.
 - Calculates p(q) from the positions of atoms for one or more molecules.
-- Calculates p(q) from the positions of atoms for smae-molecule and different-molecule in multi-molecule systems.
+- Calculates p(q) from the positions of atoms for same-molecule and different-molecule in multi-molecule systems.
+- Allows the use of different weights for each atom type
 - Rebuilds polymer, removing solvent and PBC.
 
 ## Compile
@@ -34,6 +35,7 @@ outputfile_prefix (must be string)
 bool_calc_rg?  
 bool_calc_ree?  
 bool_calc_pq?  
+bool_weight_pq?
 bool_calc_same/diff_pq? (for systems with number of molecules > 1, requires regular pq)  
 bool_output_trj?  
 Number of columns in inputfile (lammpstrj)  
@@ -51,6 +53,12 @@ Number of points used as q in p(q) calculation
 ```
 
 ## Changelog
+
+* version 2.3 -- 2021/11/29
+  * added a new, optional weighted form factor calculation. To use it, you need a weights.in file
+  * added check for inputfile, and error message if it doesn't exist.
+  * added checks for outputfiles, and error messages if they already exist.
+  * incremented version in params.in
 
 * Version 2.2.1 -- 2021/04/05
   * fixed timing module - ETA wasn't considering skipped timesteps into calculation, so it was underestimating total time in the cases where timesteps were being skipped.
