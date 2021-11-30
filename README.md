@@ -47,8 +47,8 @@ Atomtype of first atom in target molecule
 Index of the first atom for the Ree calculation (0 is the same as index 1, i.e., the first atom of type MolStartType)
 Index of the last atom for the Ree calculation (0 is the same as index MolSize)
 Output information every # timesteps  
-Exponent of lower limit of p(q) calculation  
-Exponent of higher limit of p(q) calculation  
+Exponent of the lower limit of p(q) calculation  
+Exponent of the higher limit of p(q) calculation  
 Number of points used as q in p(q) calculation  
 ```
 
