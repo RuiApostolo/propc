@@ -7,20 +7,27 @@ program propc
 ! average vs total Rg added by Rui Apóstolo in 2021
 ! weighted form factor added by Rui Apóstolo in 2021
 ! University of Edinburgh
-! version 2.3 -- 2021/11/29
+! version 2.3 -- 2021/11/30
 ! changelog from 2.2:
 !  * added a new, optional weighted form factor calculation. To use it, you need a weights.in file
 !  * added check for inputfile, and error message if it doesn't exist.
 !  * added checks for outputfiles, and error messages if they already exist.
 !  * incremented version number to params.in
+!  * added version number to command-line log
 use omp_lib
 use, intrinsic :: iso_fortran_env
 implicit none
-include 'variables.inc'
+include 'variables.f90'
 
+write(6,*)
+write(6,*) "propc version: ", trim(version)
+write(6,*)
+
+debug = .true.
 if (debug .eqv. .true.) then
   open(unit=debugf, file='debug.log', action='write', status='replace')
   write(6,*) "DEBUG MODE ON - CHECK DEBUG.LOG"
+  write(debugf,*) "propc version: ", trim(version)
 end if
 
 ! Clock start
@@ -220,27 +227,6 @@ if (b_w_pq .eqv. .true.) then
       write(6,*) "      Input file weights.in doesn't exist. Exiting."
       call_exit = .true.
   end if
-else if ((b_w_pq .eqv. .false.) .and. (input_exists .eqv. .true.)) then
-  ! get max atom_type
-  call readheader
-  allocate(array(Columns,MolSize,NMol))
-  allocate(max_mask(Columns))
-  max_mask = .false.
-  max_mask(2) = .true.
-  call readdata(MolStart,NMol,MolSize,Natom,Columns)
-  Atom_Max_g = maxval(maxval(array(2,:,:), dim=1),dim=1)
-  if (debug .eqv. .true.) write(debugf,*) "max atom type", Atom_Max_g
-  ! allocate weights
-  allocate(weights(Atom_Max_g))
-  weights = 0.0_dp
-  do l=1,NMol
-    do l2=1,molsize
-      weights(int(array(2,l,l2))) = 1.0_dp
-    end do
-  end do
-  ! cleanup
-  deallocate(array)
-  rewind(inputf)
 end if
 
 if (b_rg .eqv. .true.) then
@@ -307,7 +293,6 @@ if (debug .eqv. .true.) write(debugf,*) "Input done"
 
 ! allocate arrays
 allocate(timestep(stepmax))
-! allocate(array(NMol,MolSize,Columns)) ! deprecated
 allocate(array(Columns,MolSize,NMol))
 allocate(hold(NMol,3))
 if (b_pq .eqv. .true.) then
@@ -324,6 +309,28 @@ if (debug .eqv. .true.) write(debugf,*) "allocated variables"
 ! open input file
 open(inputf,file=Inputfile,action='read',status='old')
 if (b_w_pq .eqv. .true.) call read_weights("weights.in")
+if ((b_w_pq .eqv. .false.) .and. (input_exists .eqv. .true.)) then
+  ! get max atom_type
+  if (debug .eqv. .true.) write(debugf,*) "Setting up default weights"
+  Nstep = 1
+  call readheader
+  call readdata(MolStart,NMol,MolSize,Natom,Columns)
+  if (debug .eqv. .true.) write(debugf,*) "default weights loop - data read successfully"
+  Atom_Max_g = maxval(maxval(array(2,:,:), dim=1),dim=1)
+  if (debug .eqv. .true.) write(debugf,*) "max atom type", Atom_Max_g
+  ! allocate weights
+  allocate(weights(Atom_Max_g))
+  weights = 0.0_dp
+  do l=1,molsize
+    do l2=1,Nmol
+      weights(int(array(2,l,l2))) = 1.0_dp
+    end do
+  end do
+  ! cleanup
+  deallocate(array)
+  rewind(inputf)
+  allocate(array(Columns,MolSize,NMol))
+end if
 ! open output files
 if (b_rg  .eqv. .true.) then
   if (b_rg_ind .eqv. .true.) then
@@ -396,6 +403,8 @@ do Nstep=IgnoreFirst+1,stepmax
       hold(mol,2) = array(4,1,mol)
       hold(mol,3) = array(5,1,mol)
     end do
+    call calc_weights
+    if (debug .eqv. .true.) write(debugf,*) "tot_weight: ", tot_weight
   end if
   call molrebuild
   if ((b_rg .eqv. .true.) .and. (b_rg_ind .eqv. .true.)) call rg_ind(1,molsize,NMol)
@@ -422,7 +431,6 @@ if (b_pq_ind .eqv. .true.) then
 end if
 
 contains
-
 
   !**************************!
   ! Skip data - Rui Apóstolo !
@@ -685,7 +693,7 @@ subroutine formfactor(lower,upper,nmols,t_pq,i_pq,d_pq)
   integer(sp),intent(in)::lower,upper,nmols
   real(dp),dimension(:),allocatable,intent(inout)::t_pq
   real(dp),dimension(:),allocatable,intent(inout),optional::i_pq,d_pq
-  real(dp):: xj, yj, zj, qdiff, weight, tot_weight
+  real(dp):: xj, yj, zj, qdiff, weight
   real(dp),dimension(:),allocatable::qvalues,pvalues,q,ind_qvalues,ind_pvalues,diff_qvalues
   integer(sp):: j,k,m,n,o
   if (debug .eqv. .true.) write(debugf,*) "started formfactor"
@@ -705,14 +713,15 @@ subroutine formfactor(lower,upper,nmols,t_pq,i_pq,d_pq)
   qvalues = 0.0_dp
   pvalues = 0.0_dp
   q = 0.0_dp
-  tot_weight=real(upper*nmols,dp)
   do m=0,qpoints-1
     ! q(m) = 10.0**((1.0*((abs(lmin)+abs(lmax))/(1.0*qpoints))*m)+lmin)
     q(m) = 10.0_dp**(lmin + real(m,dp)/real(qpoints,dp) * (lmax-lmin))
   end do
 
-  if (b_pq .eqv. .true.)     qvalues = real(upper*nmols,dp)
-  if (b_pq_ind .eqv. .true.) ind_qvalues = real(upper,dp)
+  ! if (b_pq .eqv. .true.)     qvalues = real(upper*nmols,dp)
+  if (b_pq .eqv. .true.)     qvalues = 0.0_dp
+  ! if (b_pq_ind .eqv. .true.) ind_qvalues = real(upper,dp)
+  if (b_pq_ind .eqv. .true.) ind_qvalues = 0.0_dp
   if (b_pq_ind .eqv. .true.) diff_qvalues = 0.0_dp
 
 if (present(i_pq) .and. present(d_pq)) then
@@ -721,7 +730,7 @@ if (present(i_pq) .and. present(d_pq)) then
   !$OMP DEFAULT(none)        &
   !$OMP SHARED(array,q, Lx, Ly, Lz, nmols, lower, upper, weights) &
   !$OMP PRIVATE(j, k, xj, yj, zj, qdiff,o,n,weight) &
-  !$OMP REDUCTION(+:qvalues,ind_qvalues,diff_qvalues,tot_weight)
+  !$OMP REDUCTION(+:qvalues,ind_qvalues,diff_qvalues)
     ! write(6,*) m, q(m)
     ! if (debug .eqv. .true.) write(debugf,*) dummy_variable
     do n=1,nmols
@@ -736,11 +745,11 @@ if (present(i_pq) .and. present(d_pq)) then
                 zj = array(5,j,n) - array(5,k,o)
                 zj = zj - real(Lz*anint(zj/Lz),dp)
                 qdiff = 1.0_dp*dsqrt(xj**2.0_dp + yj**2.0_dp + zj**2.0_dp)
-                weight = weights(int(array(2,j,n))) + weights(int(array(2,k,o)))
-                tot_weight = tot_weight + weight
-                qvalues  = qvalues + weight * sin(q*qdiff)/(q*qdiff)
+                weight = weights(int(array(2,j,n))) * weights(int(array(2,k,o)))
+                ! tot_weight = tot_weight + weights(int(array(2,j,n))) + weights(int(array(2,k,o)))
+                qvalues  = qvalues + 2.0_dp * weight * sin(q*qdiff)/(q*qdiff)
                 ! qvalues  = qvalues + 2.0_dp * sin(q*qdiff)/(q*qdiff)
-                ind_qvalues = ind_qvalues + 2.0_dp * sin(q*qdiff)/(q*qdiff)
+                ind_qvalues = ind_qvalues + 2.0_dp * weight * sin(q*qdiff)/(q*qdiff)
             end do
           end do
         else
@@ -753,11 +762,11 @@ if (present(i_pq) .and. present(d_pq)) then
                 zj = array(5,j,n) - array(5,k,o)
                 zj = zj - real(Lz*anint(zj/Lz),dp)
                 qdiff = 1.0_dp*dsqrt(xj**2.0_dp + yj**2.0_dp + zj**2.0_dp)
-                weight = weights(int(array(2,j,n))) + weights(int(array(2,k,o)))
-                tot_weight = tot_weight + weight
-                qvalues  = qvalues + weight * sin(q*qdiff)/(q*qdiff)
+                weight = weights(int(array(2,j,n))) * weights(int(array(2,k,o)))
+                ! tot_weight = tot_weight + weights(int(array(2,j,n))) + weights(int(array(2,k,o)))
+                qvalues  = qvalues + 2.0_dp * weight * sin(q*qdiff)/(q*qdiff)
                 ! qvalues  = qvalues + 2.0_dp * sin(q*qdiff)/(q*qdiff)
-                diff_qvalues = diff_qvalues + weight * sin(q*qdiff)/(q*qdiff)
+                diff_qvalues = diff_qvalues + 2.0_dp * weight * sin(q*qdiff)/(q*qdiff)
             end do
           end do
         end if
@@ -776,7 +785,7 @@ else
   !$OMP DEFAULT(none)        &
   !$OMP SHARED(array,q, Lx, Ly, Lz, nmols, lower, upper, weights) &
   !$OMP PRIVATE(j, k, xj, yj, zj, qdiff,o,n,weight) &
-  !$OMP REDUCTION(+:qvalues,tot_weight)
+  !$OMP REDUCTION(+:qvalues)
     ! write(6,*) m, q(m)
     ! if (debug .eqv. .true.) write(debugf,*) dummy_variable
     do n=1,nmols
@@ -791,9 +800,9 @@ else
                 zj    = array(5,j,n) - array(5,k,o)
                 zj= zj - real(Lz*anint(zj/Lz),dp)
                 qdiff = 1.0_dp*dsqrt(xj**2.0_dp + yj**2.0_dp + zj**2.0_dp)
-                weight = weights(int(array(2,j,n))) + weights(int(array(2,k,o)))
-                tot_weight = tot_weight + weight
-                qvalues  = qvalues + weight * sin(q*qdiff)/(q*qdiff)
+                weight = weights(int(array(2,j,n))) * weights(int(array(2,k,o)))
+                ! tot_weight = tot_weight + weights(int(array(2,j,n))) + weights(int(array(2,k,o)))
+                qvalues  = qvalues + 2.0_dp * weight * sin(q*qdiff)/(q*qdiff)
                 ! qvalues  = qvalues + 2.0_dp * sin(q*qdiff)/(q*qdiff)
             end do
           end do
@@ -807,9 +816,9 @@ else
                 zj    = array(5,j,n) - array(5,k,o)
                 zj= zj - real(Lz*anint(zj/Lz),dp)
                 qdiff = 1.0_dp*dsqrt(xj**2.0_dp + yj**2.0_dp + zj**2.0_dp)
-                weight = weights(int(array(2,j,n))) + weights(int(array(2,k,o)))
-                tot_weight = tot_weight + weight
-                qvalues  = qvalues + weight * sin(q*qdiff)/(q*qdiff)
+                weight = weights(int(array(2,j,n))) * weights(int(array(2,k,o)))
+                ! tot_weight = tot_weight + weights(int(array(2,j,n))) + weights(int(array(2,k,o)))
+                qvalues  = qvalues + 2.0_dp * weight * sin(q*qdiff)/(q*qdiff)
                 ! qvalues  = qvalues + 2.0_dp * sin(q*qdiff)/(q*qdiff)
             end do
           end do
@@ -898,6 +907,25 @@ function r2str(k) result(str)
     write (str, *) k
     str = adjustl(str)
 end function r2str
+
+
+!***************************************!
+! Calculate total weight - Rui Apóstolo !
+!***************************************!
+
+subroutine calc_weights
+  implicit none
+  integer(sp)::n,j
+
+  tot_weight = 0.0_dp
+  do n = 1, NMol
+    do j = 1, molsize
+      tot_weight = tot_weight + weights(int(array(2,j,n)))
+    end do
+  end do
+  tot_weight = tot_weight**2.0_dp
+
+end subroutine calc_weights
 
 
 !************************************************!

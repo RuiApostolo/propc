@@ -1,3 +1,6 @@
+! version declaration
+character(len=10), parameter::version="2.3"
+
 ! real kind parametrs
 integer, parameter :: sp = selected_real_kind(6, 37)
 integer, parameter :: dp = selected_real_kind(15, 307)
@@ -11,7 +14,7 @@ real(dp),dimension(:),allocatable::timestep,ind_pq,total_pq,diff_pq
 real(dp),dimension(:),allocatable::weights
 
 ! real
-real(dp) :: Lx, Ly, Lz, Hx, Hy, Hz, lmin, lmax
+real(dp) :: Lx, Ly, Lz, Hx, Hy, Hz, lmin, lmax, tot_weight
 
 ! integers
 integer(sp)::l,l2,ierror,Natom,Nstep,NMol,mol,qpoints
@@ -23,7 +26,6 @@ integer(sp)::ReeFirst,ReeLast,Atom_Max_g
 logical :: b_rg,b_rg_ind,b_ree,b_pq,b_w_pq,b_trj,b_pq_ind
 logical :: debug=.false.,call_exit=.false.,input_exists=.false.
 logical :: weight_exists=.false.
-logical, dimension(:), allocatable :: max_mask
 
 ! strings
 character(LEN=80),dimension(4)::headertext
