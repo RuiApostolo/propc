@@ -404,6 +404,7 @@ do Nstep=IgnoreFirst+1,stepmax
       hold(mol,3) = array(5,1,mol)
     end do
     call calc_weights
+    call formfactorsetup(1,molsize,Nmol)
     if (debug .eqv. .true.) write(debugf,*) "tot_weight: ", tot_weight
   end if
   call molrebuild
@@ -681,11 +682,37 @@ subroutine ree(lower,upper,nmols)
 end subroutine ree
 
 
+!***********************************************************************!
+! Form Factor setup - Written by Rui Apóstolo                           !
+! Subroutine call necessary before any call to formfactor.              !
+!***********************************************************************!
+subroutine formfactorsetup(lower, upper, nmols)
+  implicit none
+  integer(sp),intent(in)::lower,upper,nmols
+  integer(sp) :: a, m
+  if (debug .eqv. .true.) write(debugf,*) "started formfactor setup"
+  allocate(q(0:qpoints-1))
+  q = 0.0_dp
+  do m=0,qpoints-1
+    ! q(m) = 10.0**((1.0*((abs(lmin)+abs(lmax))/(1.0*qpoints))*m)+lmin)
+    q(m) = 10.0_dp**(lmin + real(m,dp)/real(qpoints,dp) * (lmax-lmin))
+  end do
+  start_qvalue = 0.0_dp
+  start_indqvalue = 0.0_dp
+  do a = lower, upper
+    start_indqvalue = start_indqvalue + weights(int(array(2,a,1)))**2.0_dp
+  end do
+  start_qvalue = start_indqvalue * real(NMols, dp)
+  if (debug .eqv. .true.) write(debugf,*) "start_qvalue: ", start_qvalue
+  if (debug .eqv. .true.) write(debugf,*) "start_indqvalue: ", start_indqvalue
+  if (debug .eqv. .true.) write(debugf,*) "finished formfactor setup"
+end subroutine formfactorsetup
 
 
 !***********************************************************************!
 ! Form Factor calculation - Written by Rui Apóstolo                     !
 ! appended by Joanna Faulds to account for the minimum image convention.!
+! call formfactorsetup once before calling this subroutine              !
 !***********************************************************************!
 
 subroutine formfactor(lower,upper,nmols,t_pq,i_pq,d_pq)
@@ -694,8 +721,8 @@ subroutine formfactor(lower,upper,nmols,t_pq,i_pq,d_pq)
   real(dp),dimension(:),allocatable,intent(inout)::t_pq
   real(dp),dimension(:),allocatable,intent(inout),optional::i_pq,d_pq
   real(dp):: xj, yj, zj, qdiff, weight
-  real(dp),dimension(:),allocatable::qvalues,pvalues,q,ind_qvalues,ind_pvalues,diff_qvalues
-  integer(sp):: j,k,m,n,o
+  real(dp),dimension(:),allocatable::qvalues,pvalues,ind_qvalues,ind_pvalues,diff_qvalues
+  integer(sp):: j,k,n,o
   if (debug .eqv. .true.) write(debugf,*) "started formfactor"
   allocate(qvalues(0:qpoints-1))
   allocate(pvalues(0:qpoints-1))
@@ -708,20 +735,13 @@ subroutine formfactor(lower,upper,nmols,t_pq,i_pq,d_pq)
       call systemexit("missing d_pq")
     end if
   end if
-  allocate(q(0:qpoints-1))
   qdiff = 0.0_dp
-  qvalues = 0.0_dp
   pvalues = 0.0_dp
-  q = 0.0_dp
-  do m=0,qpoints-1
-    ! q(m) = 10.0**((1.0*((abs(lmin)+abs(lmax))/(1.0*qpoints))*m)+lmin)
-    q(m) = 10.0_dp**(lmin + real(m,dp)/real(qpoints,dp) * (lmax-lmin))
-  end do
 
   ! if (b_pq .eqv. .true.)     qvalues = real(upper*nmols,dp)
-  if (b_pq .eqv. .true.)     qvalues = 0.0_dp
+  if (b_pq .eqv. .true.)     qvalues = start_qvalue
   ! if (b_pq_ind .eqv. .true.) ind_qvalues = real(upper,dp)
-  if (b_pq_ind .eqv. .true.) ind_qvalues = 0.0_dp
+  if (b_pq_ind .eqv. .true.) ind_qvalues = start_indqvalue
   if (b_pq_ind .eqv. .true.) diff_qvalues = 0.0_dp
 
 if (present(i_pq) .and. present(d_pq)) then
@@ -915,15 +935,14 @@ end function r2str
 
 subroutine calc_weights
   implicit none
-  integer(sp)::n,j
+  integer(sp)::j
 
   tot_weight = 0.0_dp
-  do n = 1, NMol
-    do j = 1, molsize
-      tot_weight = tot_weight + weights(int(array(2,j,n)))
-    end do
+  do j = 1, molsize
+    ! tot_weight = tot_weight + (weights(int(array(2,j,n))))**2.0_dp
+    tot_weight = tot_weight + weights(int(array(2,j,1)))
   end do
-  tot_weight = tot_weight**2.0_dp
+  tot_weight = (real(NMol, dp) * tot_weight)**2.0_dp
 
 end subroutine calc_weights
 

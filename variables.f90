@@ -10,11 +10,12 @@ integer, parameter :: dp = selected_real_kind(15, 307)
 real(dp),dimension(:,:,:),allocatable::array
 real(dp),dimension(:,:),allocatable::hold
 real(dp),dimension(3,2)::Volume
-real(dp),dimension(:),allocatable::timestep,ind_pq,total_pq,diff_pq
+real(dp),dimension(:),allocatable::timestep,ind_pq,total_pq,diff_pq,q
 real(dp),dimension(:),allocatable::weights
 
 ! real
-real(dp) :: Lx, Ly, Lz, Hx, Hy, Hz, lmin, lmax, tot_weight
+real(dp) :: Lx, Ly, Lz, Hx, Hy, Hz, lmin, lmax
+real(dp) :: tot_weight, start_qvalue, start_indqvalue
 
 ! integers
 integer(sp)::l,l2,ierror,Natom,Nstep,NMol,mol,qpoints
