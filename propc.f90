@@ -18,6 +18,7 @@ use, intrinsic :: iso_fortran_env
 implicit none
 include 'variables.inc'
 
+debug = .true.
 if (debug .eqv. .true.) then
   open(unit=debugf, file='debug.log', action='write', status='replace')
   write(6,*) "DEBUG MODE ON - CHECK DEBUG.LOG"
@@ -31,8 +32,9 @@ read(5,*)
 read(5,'(a)',iostat=ierror)  Inputfile
   if (debug .eqv. .true.) write(debugf,*) "Inputfile", Inputfile
   if (ierror /= 0) call systemexit("Input file")
+! place saved but unused:
 read(5,'(a)',iostat=ierror)  Outputprefix
-  if (debug .eqv. .true.) write(debugf,*) "Outputprefix", Outputprefix
+  if (debug .eqv. .true.) write(debugf,*) "Outputprefix", Outputprefix 
   if (ierror /= 0) call systemexit("Output file")
 read(5,'(L6)',iostat=ierror)      b_rg
   if (debug .eqv. .true.) write(debugf,*) "b_rg", b_rg
@@ -214,13 +216,14 @@ if (input_exists .eqv. .false.) then
     write(6,*) "      Input file ",trim(Inputfile)," doesn't exist. Exiting."
     call_exit = .true.
 end if
+open(inputf,file=Inputfile,action='read',status='old')
 if (b_w_pq .eqv. .true.) then
   inquire(file="weights.in", exist=weight_exists)
   if (weight_exists .eqv. .false.) then
       write(6,*) "      Input file weights.in doesn't exist. Exiting."
       call_exit = .true.
   end if
-else if ((b_w_pq .eqv. .false.) .and. (input_exists .eqv. .true.)) then
+else if ((b_pq .eqv. .true.) .and. (input_exists .eqv. .true.)) then
   ! get max atom_type
   call readheader
   allocate(array(Columns,MolSize,NMol))
@@ -321,8 +324,6 @@ if (b_pq_ind .eqv. .true.) then
   diff_pq = 0.0_dp
 end if
 if (debug .eqv. .true.) write(debugf,*) "allocated variables"
-! open input file
-open(inputf,file=Inputfile,action='read',status='old')
 if (b_w_pq .eqv. .true.) call read_weights("weights.in")
 ! open output files
 if (b_rg  .eqv. .true.) then
