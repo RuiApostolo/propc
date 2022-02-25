@@ -18,7 +18,6 @@ use, intrinsic :: iso_fortran_env
 implicit none
 include 'variables.inc'
 
-debug = .true.
 if (debug .eqv. .true.) then
   open(unit=debugf, file='debug.log', action='write', status='replace')
   write(6,*) "DEBUG MODE ON - CHECK DEBUG.LOG"
@@ -133,7 +132,7 @@ end if
 if (StepMax < 0) then
   write(6,*) "'StepMax' line in params.in must be an integer bigger than 0."
   call_exit = .true.
-else if (StepMax < 1001) then
+else if (StepMax < 101) then
   write(6,*) StepMax," steps is an unusually low number for StepMax, make sure it's correct."
 end if
 if (StepMax-IgnoreFirst > 19999) then
@@ -208,6 +207,7 @@ else if (qpoints > 200) then
   write(6,*) qpoints,"is a very high number for the number of q points, make sure it's correct."
 end if
 
+
 ! file checks
 write(6,*) ""
 write(6,*) "Checking input and output files:"
@@ -223,8 +223,10 @@ if (b_w_pq .eqv. .true.) then
       write(6,*) "      Input file weights.in doesn't exist. Exiting."
       call_exit = .true.
   end if
-else if ((b_pq .eqv. .true.) .and. (input_exists .eqv. .true.)) then
+else if (b_pq .eqv. .true.) then
   ! get max atom_type
+  allocate(timestep(stepmax))
+  NStep = 0
   call readheader
   allocate(array(Columns,MolSize,NMol))
   allocate(max_mask(Columns))
@@ -236,13 +238,17 @@ else if ((b_pq .eqv. .true.) .and. (input_exists .eqv. .true.)) then
   ! allocate weights
   allocate(weights(Atom_Max_g))
   weights = 0.0_dp
-  do l=1,NMol
-    do l2=1,molsize
-      weights(int(array(2,l,l2))) = 1.0_dp
-    end do
-  end do
+  write(6, *) "l, l2, array(2, l2, l)"
+  weights = 1.0_dp
+
+  ! do l=1,NMol
+  !   do l2=1,MolSize
+  !     write(6, *) l, l2, array(2, l2, l)
+  !     weights(int(array(2,l2,l))) = 1.0_dp
+  !   end do
+  ! end do
   ! cleanup
-  deallocate(array)
+  ! deallocate(array)
   rewind(inputf)
 end if
 
@@ -309,9 +315,7 @@ write(6,*)
 if (debug .eqv. .true.) write(debugf,*) "Input done"
 
 ! allocate arrays
-allocate(timestep(stepmax))
-! allocate(array(NMol,MolSize,Columns)) ! deprecated
-allocate(array(Columns,MolSize,NMol))
+! allocate(timestep(stepmax))
 allocate(hold(NMol,3))
 if (b_pq .eqv. .true.) then
   allocate(total_pq(0:qpoints-1))
@@ -481,6 +485,21 @@ subroutine readheader
     write(debugf,*) "Hx,y,z: ",Hx,Hy,Hz
   end if
 end subroutine readheader
+
+
+!****************************!
+! Skip header - Rui Apóstolo !
+!****************************!
+
+subroutine skipheader
+  implicit none
+  integer(sp) :: i
+  if (debug .eqv. .true.) write(debugf,*) "started readheader"
+  Do i=1, 9
+    read(inputf, *)
+  end do
+  if (debug .eqv. .true.) write(debugf,*) "finished readheader"
+end subroutine skipheader
 
 
 !***************************************!
