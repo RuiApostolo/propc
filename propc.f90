@@ -18,6 +18,7 @@ use, intrinsic :: iso_fortran_env
 implicit none
 include 'variables.inc'
 
+! debug = .true.
 if (debug .eqv. .true.) then
   open(unit=debugf, file='debug.log', action='write', status='replace')
   write(6,*) "DEBUG MODE ON - CHECK DEBUG.LOG"
@@ -217,6 +218,10 @@ if (input_exists .eqv. .false.) then
     call_exit = .true.
 end if
 open(inputf,file=Inputfile,action='read',status='old')
+allocate(timestep(stepmax))
+NStep = 0
+call readheader
+allocate(array(Columns,MolSize,NMol))
 if (b_w_pq .eqv. .true.) then
   inquire(file="weights.in", exist=weight_exists)
   if (weight_exists .eqv. .false.) then
@@ -225,10 +230,6 @@ if (b_w_pq .eqv. .true.) then
   end if
 else if (b_pq .eqv. .true.) then
   ! get max atom_type
-  allocate(timestep(stepmax))
-  NStep = 0
-  call readheader
-  allocate(array(Columns,MolSize,NMol))
   allocate(max_mask(Columns))
   max_mask = .false.
   max_mask(2) = .true.
@@ -237,10 +238,8 @@ else if (b_pq .eqv. .true.) then
   if (debug .eqv. .true.) write(debugf,*) "max atom type", Atom_Max_g
   ! allocate weights
   allocate(weights(Atom_Max_g))
-  weights = 0.0_dp
-  write(6, *) "l, l2, array(2, l2, l)"
+  write(6,*) "      Setting all weights to 1."
   weights = 1.0_dp
-
   ! do l=1,NMol
   !   do l2=1,MolSize
   !     write(6, *) l, l2, array(2, l2, l)
@@ -249,8 +248,8 @@ else if (b_pq .eqv. .true.) then
   ! end do
   ! cleanup
   ! deallocate(array)
-  rewind(inputf)
 end if
+rewind(inputf)
 
 if (b_rg .eqv. .true.) then
   call check_file("rg.dat")
