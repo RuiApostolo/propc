@@ -54,6 +54,9 @@ Number of points used as q in p(q) calculation
 
 ## Changelog
 
+* version 2.3.1 -- 2022/12/01
+  * bug fixes
+
 * version 2.3 -- 2021/11/29
   * added a new, optional weighted form factor calculation. To use it, you need a weights.in file
   * added check for inputfile, and error message if it doesn't exist.

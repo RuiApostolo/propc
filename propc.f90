@@ -20,7 +20,9 @@ include 'variables.inc'
 
 ! debug = .true.
 if (debug .eqv. .true.) then
+  write(6,*) "opening debug file"
   open(unit=debugf, file='debug.log', action='write', status='replace')
+  write(debugf,*) "Debug on"
   write(6,*) "DEBUG MODE ON - CHECK DEBUG.LOG"
 end if
 
@@ -142,7 +144,7 @@ end if
 if (StepMax-IgnoreFirst < 1) then
   write(6,*)      "StepMax - IgnoreFirst  must be an integer bigger than 0."
   call_exit = .true.
-else if (StepMax-IgnoreFirst < 4999) then
+else if (StepMax-IgnoreFirst < 999) then
   write(6,*) StepMax-IgnoreFirst," steps is an unusually low number of steps, make sure it's correct."
 else if (IgnoreFirst < 0) then
   write(6,*) "'IgnoreFirst' line in params.in must be an integer bigger than or equal to 0."
@@ -212,14 +214,19 @@ end if
 ! file checks
 write(6,*) ""
 write(6,*) "Checking input and output files:"
+if (debug .eqv. .true.) write(debugf,*) "Checking input files"
+if (debug .eqv. .true.) write(debugf,*) "Checking dumpfile"
 inquire(file=Inputfile, exist=input_exists)
 if (input_exists .eqv. .false.) then
     write(6,*) "      Input file ",trim(Inputfile)," doesn't exist. Exiting."
     call_exit = .true.
 end if
+if (debug .eqv. .true.) write(debugf,*) "opening dumpfile"
 open(inputf,file=Inputfile,action='read',status='old')
+if (debug .eqv. .true.) write(debugf,*) "allocating stepmax"
 allocate(timestep(stepmax))
 NStep = 0
+if (debug .eqv. .true.) write(debugf,*) "weights - readheader"
 call readheader
 allocate(array(Columns,MolSize,NMol))
 if (b_w_pq .eqv. .true.) then
